@@ -35,7 +35,7 @@ const CategoryTable = ({ categories, onEdit }) => {
                   {/* Image Column */}
                   <td className="px-6 py-4 w-24">
                     <img
-                      src={cat.image}
+                      src={cat.image ? `http://localhost:5000${cat.image}` : "https://via.placeholder.com/150"}
                       alt={cat.name}
                       className="w-12 h-12 rounded-lg object-cover bg-gray-100 border border-gray-200"
                     />

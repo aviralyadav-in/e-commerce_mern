@@ -10,6 +10,8 @@ const pageTitles = {
   "/categories": "Categories Management",
   "/products": "Products Management",
   "/orders": "Orders Management",
+  "/banners": "Banners Management",
+  "/coupons": "Coupons Management",
 };
 
 const Navbar = ({ isOpen, setIsOpen }) => {

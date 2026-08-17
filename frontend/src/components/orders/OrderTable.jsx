@@ -11,11 +11,13 @@ const OrderTable = ({ orders }) => {
   // Redux store se users ka data liya taaki unka naam dikha sakein
   const { users } = useSelector((state) => state.users);
 
-  const getCustomerName = (userId) => {
-    // order.userId ho sakta hai object ho ya sirf string id
-    const idStr = typeof userId === 'object' ? userId?._id : userId;
-    const user = users.find((u) => u._id === idStr);
-    return user ? user.name : userId?.name || "Unknown Customer";
+  const getCustomerName = (user) => {
+    // FIX: Backend "user" field bhejta hai, "userId" nahi
+    // order.user populated object ho sakta hai ya sirf string id
+    if (typeof user === "object" && user?.name) return user.name;
+    const idStr = typeof user === "object" ? user?._id : user;
+    const found = users.find((u) => u._id === idStr);
+    return found ? found.name : "Unknown Customer";
   };
 
   // Status Update Handler
@@ -31,6 +33,23 @@ const OrderTable = ({ orders }) => {
       window.confirm("Are you sure you want to delete this order entirely?")
     ) {
       dispatch(deleteOrder(orderId));
+    }
+  };
+
+  // Status ke liye color mapping
+  const getStatusStyles = (status) => {
+    switch (status) {
+      case "Delivered":
+        return "border-green-200 bg-green-50 text-green-700";
+      case "Shipped":
+        return "border-blue-200 bg-blue-50 text-blue-700";
+      case "Processing":
+        return "border-yellow-200 bg-yellow-50 text-yellow-700";
+      case "Cancelled":
+        return "border-red-200 bg-red-50 text-red-700";
+      case "Pending":
+      default:
+        return "border-orange-200 bg-orange-50 text-orange-700";
     }
   };
 
@@ -66,32 +85,32 @@ const OrderTable = ({ orders }) => {
                     </div>
                   </td>
 
-                  {/* Customer Details */}
+                  {/* Customer Details — FIX: order.user use karna hai, order.userId nahi */}
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="font-semibold text-gray-800">
-                        {getCustomerName(order.userId)}
+                        {getCustomerName(order.user)}
                       </span>
                       <span className="text-xs text-gray-400">
-                        ID: {typeof order.userId === 'object' ? order.userId?._id : order.userId}
+                        ID: {typeof order.user === "object" ? order.user?._id : order.user}
                       </span>
                     </div>
                   </td>
 
-                  {/* Items & Total */}
+                  {/* Items & Total — FIX: order.orderItems use karna hai, order.items nahi */}
                   <td className="px-6 py-4">
                     <div className="flex flex-col">
                       <span className="text-gray-600 text-xs mb-1">
-                        {order.items.length}{" "}
-                        {order.items.length > 1 ? "items" : "item"}
+                        {order.orderItems?.length || 0}{" "}
+                        {(order.orderItems?.length || 0) > 1 ? "items" : "item"}
                       </span>
                       <span className="font-bold text-gray-900 text-base">
-                        ₹{order.totalAmount.toLocaleString("en-IN")}
+                        ₹{(order.totalAmount || 0).toLocaleString("en-IN")}
                       </span>
                     </div>
                   </td>
 
-                  {/* Status Dropdown */}
+                  {/* Status Dropdown — FIX: Pending + Cancelled options add kiye */}
                   <td className="px-6 py-4">
                     <select
                       value={order.orderStatus}
@@ -99,15 +118,15 @@ const OrderTable = ({ orders }) => {
                         handleStatusChange(order._id, e.target.value)
                       }
                       className={`px-3 py-1.5 rounded-lg text-sm font-semibold border-2 outline-none cursor-pointer transition-colors
-                        ${
-                          order.orderStatus === "Delivered"
-                            ? "border-green-200 bg-green-50 text-green-700"
-                            : order.orderStatus === "Shipped"
-                              ? "border-blue-200 bg-blue-50 text-blue-700"
-                              : "border-yellow-200 bg-yellow-50 text-yellow-700"
-                        }
+                        ${getStatusStyles(order.orderStatus)}
                       `}
                     >
+                      <option
+                        value="Pending"
+                        className="text-gray-800 bg-white"
+                      >
+                        Pending
+                      </option>
                       <option
                         value="Processing"
                         className="text-gray-800 bg-white"
@@ -125,6 +144,12 @@ const OrderTable = ({ orders }) => {
                         className="text-gray-800 bg-white"
                       >
                         Delivered
+                      </option>
+                      <option
+                        value="Cancelled"
+                        className="text-gray-800 bg-white"
+                      >
+                        Cancelled
                       </option>
                     </select>
                   </td>

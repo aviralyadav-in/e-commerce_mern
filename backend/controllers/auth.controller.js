@@ -176,8 +176,8 @@ export const adminLogin = async (req, res) => {
 // ==========================================
 export const logout = async (req, res) => {
   try {
-    // FIX: Changed back to req.user.name according to schema
-    const name = req.user.name;
+    // FIX: req.user could be undefined if admin logged out via this route
+    const name = req.user?.name || "User";
 
     res.clearCookie("token", {
       httpOnly: true,
@@ -245,12 +245,13 @@ export const updateProfile = async (req, res) => {
 
     const updateData = {};
     // Sirf wahi fields update karenge jo req.body me aaye hain
-    if (name) updateData.name = name;
-    if (email) updateData.email = email;
-    if (phone) updateData.phone = phone;
-    if (avatar) updateData.avatar = avatar;
-    if (gender) updateData.gender = gender;
-    if (dateOfBirth) updateData.dateOfBirth = dateOfBirth;
+    // FIX: undefined check use karna chahiye, falsy check nahi — warna empty string ("") ya null set nahi hoga
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone;
+    if (avatar !== undefined) updateData.avatar = avatar;
+    if (gender !== undefined) updateData.gender = gender;
+    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
 
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ message: "Nothing to update" });

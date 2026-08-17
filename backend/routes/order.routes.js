@@ -14,29 +14,31 @@ import { adminRoute } from "../middleware/admin.middleware.js";
 const orderRouter = express.Router();
 
 // ==========================================
+// 🛡️ ADMIN ROUTES (Sirf Admins ke liye)
+// FIX: Admin routes ko /:id se PEHLE register karna zaroori hai,
+// warna Express "admin" ko :id param samajh lega!
+// ==========================================
+
+// 1. Get all orders (Admin Dashboard)
+orderRouter.get("/admin/all-orders", adminRoute, getAllOrders);
+
+// 2. Get single order details (Admin)
+orderRouter.get("/admin/:id", adminRoute, getOrderById);
+
+// 3. Update order status (Admin)
+orderRouter.put("/admin/:id/status", adminRoute, updateOrderStatus);
+
+// ==========================================
 // 🧑‍💻 USER ROUTES (Logged-in users ke liye)
 // ==========================================
 
-// 1. Create a new order
+// 4. Create a new order
 orderRouter.post("/", protectedRoute, createOrder);
 
-// 2. Get logged-in user's orders
+// 5. Get logged-in user's orders
 orderRouter.get("/my-orders", protectedRoute, myOrders);
 
-// 3. Get single order details (User)
+// 6. Get single order details (User)
 orderRouter.get("/:id", protectedRoute, getOrderById);
-
-// ==========================================
-// 🛡️ ADMIN ROUTES (Sirf Admins ke liye)
-// ==========================================
-
-// 4. Get all orders (Admin Dashboard)
-orderRouter.get("/admin/all-orders", adminRoute, getAllOrders);
-
-// 5. Get single order details (Admin)
-orderRouter.get("/admin/:id", adminRoute, getOrderById);
-
-// 6. Update order status (Admin)
-orderRouter.put("/admin/:id/status", adminRoute, updateOrderStatus);
 
 export default orderRouter;

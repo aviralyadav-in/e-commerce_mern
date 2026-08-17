@@ -51,8 +51,12 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     formData.append("price", Number(price));
     formData.append("stock", Number(stock));
     formData.append("categoryId", categoryId);
-    formData.append("sku", `SKU-${Date.now()}`);
     formData.append("isActive", status !== "Out of Stock");
+
+    // SKU sirf naye product ke liye generate karo, edit mein mat bhejo
+    if (!editData) {
+      formData.append("sku", `SKU-${Date.now()}`);
+    }
 
     if (image) {
       formData.append("desktopImages", image);

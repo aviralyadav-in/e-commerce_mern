@@ -10,6 +10,8 @@ import UsersPage from "./pages/UsersPage";
 import CategoriesPage from "./pages/CategoriesPage";
 import ProductsPage from "./pages/ProductsPage";
 import OrdersPage from "./pages/OrdersPage";
+import BannersPage from "./pages/BannersPage";
+import CouponsPage from "./pages/CouponsPage";
 
 function App() {
   return (
@@ -35,6 +37,8 @@ function App() {
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="orders" element={<OrdersPage />} />
+        <Route path="banners" element={<BannersPage />} />
+        <Route path="coupons" element={<CouponsPage />} />
       </Route>
 
       {/* 404 Route - Agar koi galat URL daale, toh usko wapas dashboard bhejo */}
@@ -44,3 +48,4 @@ function App() {
 }
 
 export default App;
+

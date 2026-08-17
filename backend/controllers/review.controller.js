@@ -162,8 +162,9 @@ export const updateReview = async (req, res) => {
     }
 
     // Update the review
-    if (result.data.rating) review.rating = result.data.rating;
-    if (result.data.comment) review.comment = result.data.comment;
+    // FIX: undefined check use karna chahiye, falsy check nahi — warna valid values skip ho sakti hain
+    if (result.data.rating !== undefined) review.rating = result.data.rating;
+    if (result.data.comment !== undefined) review.comment = result.data.comment;
 
     await review.save();
 

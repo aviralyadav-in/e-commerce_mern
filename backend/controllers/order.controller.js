@@ -162,10 +162,11 @@ export const getOrderById = async (req, res) => {
     }
 
     // Security Check: Sirf order ka owner ya Admin isko dekh sakta hai
-    if (
-      order.user._id.toString() !== req.user._id.toString() &&
-      req.user.role !== "SuperAdmin"
-    ) {
+    // FIX: User model mein role field nahi hai, admin middleware req.admin set karta hai
+    const isOwner = req.user && order.user._id.toString() === req.user._id.toString();
+    const isAdmin = req.admin?.role === "SuperAdmin";
+
+    if (!isOwner && !isAdmin) {
       return res
         .status(403)
         .json({ message: "Not authorized to view this order" });

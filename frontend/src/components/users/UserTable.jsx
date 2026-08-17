@@ -9,7 +9,7 @@ const UserTable = ({ users }) => {
             <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
               <th className="px-6 py-4 font-medium">Customer</th>
               <th className="px-6 py-4 font-medium">Contact</th>
-              <th className="px-6 py-4 font-medium">Address</th>
+              <th className="px-6 py-4 font-medium">Gender</th>
               <th className="px-6 py-4 font-medium">Joined Date</th>
             </tr>
           </thead>
@@ -70,13 +70,24 @@ const UserTable = ({ users }) => {
                     </div>
                   </td>
 
-                  {/* Address Column */}
+                  {/* Gender Column — FIX: Address field User model mein nahi hai, gender dikhao */}
                   <td className="px-6 py-4">
                     <span
-                      className="text-gray-600 max-w-xs block truncate"
-                      title={user.address}
+                      className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize
+                        ${
+                          user.gender === "male"
+                            ? "bg-blue-50 text-blue-700"
+                            : user.gender === "female"
+                              ? "bg-pink-50 text-pink-700"
+                              : user.gender === "other"
+                                ? "bg-purple-50 text-purple-700"
+                                : "bg-gray-100 text-gray-500"
+                        }
+                      `}
                     >
-                      {user.address || "N/A"}
+                      {user.gender === "prefer_not_to_say"
+                        ? "Not Specified"
+                        : user.gender || "N/A"}
                     </span>
                   </td>
 

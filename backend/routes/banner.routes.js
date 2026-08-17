@@ -16,7 +16,7 @@ const bannerRouter = express.Router();
 bannerRouter.get("/", getBanners);
 // 🔥 Ab yahan bannerUpload.single("image") lagayein
 bannerRouter.post("/", adminRoute, bannerUpload.single("image"), createBanner);
-bannerRouter.get("/:id", adminRoute, getBannerById);
+bannerRouter.get("/:id", getBannerById);
 bannerRouter.put(
   "/:id",
   adminRoute,
