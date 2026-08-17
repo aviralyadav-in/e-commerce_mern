@@ -8,10 +8,12 @@ const __dirname = path.dirname(__filename);
 
 const uploadDir = path.join(__dirname, "..", "uploads");
 
+// 1. Yahan 'banners' folder add kiya gaya hai
 const foldersToCreate = [
   uploadDir,
   path.join(uploadDir, "categories"),
   path.join(uploadDir, "products"),
+  path.join(uploadDir, "banners"), // 🔥 Banner folder added
 ];
 
 foldersToCreate.forEach((folder) => {
@@ -56,5 +58,7 @@ const createUpload = (subFolder) => {
   });
 };
 
+// Exports
 export const categoryUpload = createUpload("categories");
 export const productUpload = createUpload("products");
+export const bannerUpload = createUpload("banners"); // 🔥 Banner export added

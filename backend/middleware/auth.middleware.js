@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
+// Fix: Default import use kiya hai
 
 export const protectedRoute = async (req, res, next) => {
   try {
@@ -22,10 +23,18 @@ export const protectedRoute = async (req, res, next) => {
     }
 
     req.user = user;
-
     next();
   } catch (error) {
     console.error("Auth Middleware Error:", error);
+
+    if (
+      error.name === "TokenExpiredError" ||
+      error.name === "JsonWebTokenError"
+    ) {
+      return res.status(401).json({
+        message: "Unauthorized, invalid or expired token",
+      });
+    }
 
     return res.status(500).json({
       message: "Internal server error",

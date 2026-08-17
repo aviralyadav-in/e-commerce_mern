@@ -1,74 +1,45 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import React from "react";
+import { Routes, Route, Navigate } from "react-router";
+import Layout from "./components/layout/Layout";
+import ProtectedRoute from "./components/common/ProtectedRoute";
 
-import HomePage from "./pages/HomePage";
-import SignupPage from "./pages/SignupPage";
+// Pages Import
 import LoginPage from "./pages/LoginPage";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminDashboardPage from "./pages/AdminDashboardPage";
-import AdminCategoriesPage from "./pages/AdminCategoriesPage";
-import AdminProductsPage from "./pages/AdminProductsPage";
-
-import ProtectedRoute from "./routes/ProtectedRoute";
-import GuestRoute from "./routes/GuestRoute";
-import AdminProtectedRoute from "./routes/AdminProtectedRoute";
+import DashboardPage from "./pages/DashboardPage";
+import UsersPage from "./pages/UsersPage";
+import CategoriesPage from "./pages/CategoriesPage";
+import ProductsPage from "./pages/ProductsPage";
+import OrdersPage from "./pages/OrdersPage";
 
 function App() {
   return (
-    <div className="min-h-screen text-slate-900">
-      <Routes>
-        {/* Public */}
-        <Route path="/" element={<HomePage />} />
+    <Routes>
+      {/* Public Route - Koi bhi dekh sakta hai */}
+      <Route path="/login" element={<LoginPage />} />
 
-        {/* Guest Only */}
-        <Route
-          path="/signup"
-          element={
-            <GuestRoute>
-              <SignupPage />
-            </GuestRoute>
-          }
-        />
+      {/* Protected Admin Routes - Sirf logged in admin dekh sakta hai */}
+      <Route
+        path="/"
+        element={
+          <ProtectedRoute>
+            <Layout />
+          </ProtectedRoute>
+        }
+      >
+        {/* Agar seedha '/' par jaye, toh dashboard par bhej do */}
+        <Route index element={<Navigate to="/dashboard" replace />} />
 
-        <Route
-          path="/login"
-          element={
-            <GuestRoute>
-              <LoginPage />
-            </GuestRoute>
-          }
-        />
+        {/* Actual Pages */}
+        <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="users" element={<UsersPage />} />
+        <Route path="categories" element={<CategoriesPage />} />
+        <Route path="products" element={<ProductsPage />} />
+        <Route path="orders" element={<OrdersPage />} />
+      </Route>
 
-        {/* Admin */}
-        <Route path="/admin/login" element={<AdminLoginPage />} />
-        <Route
-          path="/admin/dashboard"
-          element={
-            <AdminProtectedRoute>
-              <AdminDashboardPage />
-            </AdminProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/categories"
-          element={
-            <AdminProtectedRoute>
-              <AdminCategoriesPage />
-            </AdminProtectedRoute>
-          }
-        />
-        <Route
-          path="/admin/products"
-          element={
-            <AdminProtectedRoute>
-              <AdminProductsPage />
-            </AdminProtectedRoute>
-          }
-        />
-
-        {/* 404 */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
+      {/* 404 Route - Agar koi galat URL daale, toh usko wapas dashboard bhejo */}
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+    </Routes>
   );
 }
 

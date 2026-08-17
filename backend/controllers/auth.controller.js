@@ -1,15 +1,19 @@
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { User } from "../models/user.model.js";
+import { User } from "../models/user.model.js"; // Aapke path ke hisab se
 import {
   loginSchema,
-  signupSchema,
   updateProfileSchema,
-} from "../validators/authValidator.js";
+  userValidationSchema,
+} from "../validators/userValidate.js";
 
+// ==========================================
+// 1. SIGNUP CONTROLLER
+// ==========================================
 export const signup = async (req, res) => {
   try {
-    const result = signupSchema.safeParse(req.body);
+    // Zod Validation
+    const result = userValidationSchema.safeParse(req.body);
 
     if (!result.success) {
       const formattedErrors = result.error.flatten().fieldErrors;
@@ -19,36 +23,35 @@ export const signup = async (req, res) => {
       });
     }
 
-    const { name, email, password } = result.data;
+    // Corrected fields according to your schema
+    const { name, email, password, phone, avatar, gender, dateOfBirth } =
+      result.data;
 
+    // Check only Email (Kyunki schema me sirf email unique hai, username nahi hai)
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      return res.status(400).json({
-        message: "Email already registered",
-      });
+      return res.status(400).json({ message: "Email already registered" });
     }
 
     const salt = await bcryptjs.genSalt(10);
     const hashedPassword = await bcryptjs.hash(password, salt);
 
+    // Create user with matching schema fields
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role: "customer",
+      phone,
+      avatar,
+      gender,
+      dateOfBirth,
     });
 
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      },
-    );
+    // JWT sign (Schema me role nahi tha, isliye hata diya gaya)
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -57,24 +60,22 @@ export const signup = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    // Password ko response se hide karne ke liye
+    user.password = undefined;
+
     return res.status(201).json({
       message: "User registered successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      user: user,
     });
   } catch (error) {
     console.error("Signup Error:", error);
-
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+// ==========================================
+// 2. LOGIN CONTROLLER
+// ==========================================
 export const login = async (req, res) => {
   try {
     const result = loginSchema.safeParse(req.body);
@@ -89,32 +90,22 @@ export const login = async (req, res) => {
 
     const { email, password } = result.data;
 
-    const user = await User.findOne({ email });
+    // IMPORTANT FIX: .select("+password") zaroori hai kyunki schema me select: false hai
+    const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
-      return res.status(401).json({
-        message: "Invalid email or password",
-      });
+      return res.status(401).json({ message: "Invalid email or password" });
     }
 
     const isPasswordCorrect = await bcryptjs.compare(password, user.password);
 
     if (!isPasswordCorrect) {
-      return res.status(401).json({
-        message: "Invalid email or password",
-      });
+      return res.status(401).json({ message: "Invalid email or password" });
     }
 
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        role: user.role,
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d",
-      },
-    );
+    const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
     res.cookie("token", token, {
       httpOnly: true,
@@ -123,70 +114,105 @@ export const login = async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    // Response me password na bheje
+    user.password = undefined;
+
     return res.status(200).json({
       message: "Login successful",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      user: user,
     });
   } catch (error) {
     console.error("Login Error:", error);
-
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+// ==========================================
+// 3. ADMIN LOGIN CONTROLLER
+// ==========================================
+export const adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // Admin model se find karenge
+    const { Admin } = await import("../models/admin.model.js");
+    const admin = await Admin.findOne({ email }).select("+password");
+
+    if (!admin) {
+      return res.status(401).json({ message: "Invalid admin email or password" });
+    }
+
+    const isPasswordCorrect = await bcryptjs.compare(password, admin.password);
+
+    if (!isPasswordCorrect) {
+      return res.status(401).json({ message: "Invalid admin email or password" });
+    }
+
+    const token = jwt.sign({ userId: admin._id }, process.env.JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    admin.password = undefined;
+
+    return res.status(200).json({
+      message: "Admin login successful",
+      user: admin,
+    });
+  } catch (error) {
+    console.error("Admin Login Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// ==========================================
+// 4. LOGOUT CONTROLLER
+// ==========================================
 export const logout = async (req, res) => {
   try {
-    const username = req.user.name;
+    // FIX: Changed back to req.user.name according to schema
+    const name = req.user.name;
 
     res.clearCookie("token", {
       httpOnly: true,
-
-      sameSite: "strict",
-
       secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
     });
 
     return res.status(200).json({
-      message: `${username} logged out successfully`,
+      message: `${name} Logged out successfully`,
     });
   } catch (error) {
     console.error("Logout Error:", error);
-
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+// ==========================================
+// 4. GET PROFILE CONTROLLER
+// ==========================================
 export const getProfile = async (req, res) => {
   try {
-    const user = req.user;
-
     return res.status(200).json({
       message: "Profile fetched successfully",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
+      user: req.user,
     });
   } catch (error) {
     console.error("Get Profile Error:", error);
-
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
 
+// ==========================================
+// 5. UPDATE PROFILE CONTROLLER
+// ==========================================
 export const updateProfile = async (req, res) => {
   try {
     const result = updateProfileSchema.safeParse(req.body);
@@ -199,41 +225,48 @@ export const updateProfile = async (req, res) => {
       });
     }
 
-    const { name, email } = result.data;
+    // FIX: Schema ke hisab se exact fields extract kiye
+    const { name, email, phone, avatar, gender, dateOfBirth } = result.data;
     const userId = req.user._id;
 
+    // Email check if user is updating email
     if (email) {
-      const existingUser = await User.findOne({ email, _id: { $ne: userId } });
+      const existingUser = await User.findOne({
+        email,
+        _id: { $ne: userId },
+      });
+
       if (existingUser) {
-        return res.status(400).json({
-          message: "Email already registered",
-        });
+        return res
+          .status(400)
+          .json({ message: "Email already registered to another user" });
       }
     }
 
     const updateData = {};
+    // Sirf wahi fields update karenge jo req.body me aaye hain
     if (name) updateData.name = name;
     if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+    if (avatar) updateData.avatar = avatar;
+    if (gender) updateData.gender = gender;
+    if (dateOfBirth) updateData.dateOfBirth = dateOfBirth;
+
+    if (Object.keys(updateData).length === 0) {
+      return res.status(400).json({ message: "Nothing to update" });
+    }
 
     const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
-      returnDocument: "after",
+      new: true,
       runValidators: true,
-    }).select("-password");
+    });
 
     return res.status(200).json({
       message: "Profile updated successfully",
-      user: {
-        id: updatedUser._id,
-        name: updatedUser.name,
-        email: updatedUser.email,
-        role: updatedUser.role,
-      },
+      user: updatedUser,
     });
   } catch (error) {
     console.error("Update Profile Error:", error);
-
-    return res.status(500).json({
-      message: "Internal server error",
-    });
+    return res.status(500).json({ message: "Internal server error" });
   }
 };

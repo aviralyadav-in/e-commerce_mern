@@ -5,63 +5,79 @@ const orderSchema = new mongoose.Schema(
     user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: [true, "User reference is required for an order"],
-      index: true, // Frontend pe "My Orders" page ko super-fast load karne ke liye
+      required: true,
     },
-
-    status: {
-      type: String,
-      enum: {
-        values: ["pending", "processing", "shipped", "delivered", "cancelled"],
-        message: "{VALUE} is not a valid order status",
+    shippingAddress: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Address",
+      required: true,
+    },
+    orderItems: [
+      {
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+          required: true,
+        },
+        quantity: {
+          type: Number,
+          required: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+        },
       },
-      default: "pending",
-      index: true, // Admin Panel me "Pending Orders" ya "Shipped Orders" ko jaldi filter karne ke liye
+    ],
+    itemsPrice: {
+      type: Number,
+      required: true,
+      default: 0,
     },
-
+    shippingPrice: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    couponCode: {
+      type: String,
+      default: null,
+    },
+    discountAmount: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
     totalAmount: {
       type: Number,
-      required: [true, "Total amount is required"],
-      min: [0, "Total amount cannot be negative"],
+      required: true,
+      default: 0,
     },
-
+    paymentMethod: {
+      type: String,
+      enum: ["COD", "Card", "UPI"],
+      required: true,
+    },
     paymentStatus: {
       type: String,
-      enum: {
-        values: ["pending", "paid", "failed", "refunded"], // 'refunded' add kiya hai order cancel hone ke case ke liye
-        message: "{VALUE} is not a valid payment status",
-      },
-      default: "pending",
+      enum: ["Pending", "Completed", "Failed", "Refunded"],
+      default: "Pending",
     },
-
-    shippingAddress: {
-      street: {
-        type: String,
-        required: [true, "Street address is required"],
-        trim: true,
-      },
-      city: {
-        type: String,
-        required: [true, "City is required"],
-        trim: true,
-      },
-      state: {
-        type: String,
-        required: [true, "State is required"],
-        trim: true,
-      },
-      pincode: {
-        type: String,
-        required: [true, "Pincode is required"],
-        trim: true,
-      },
+    transactionId: {
+      type: String,
+    },
+    orderStatus: {
+      type: String,
+      enum: ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"],
+      default: "Pending",
+    },
+    deliveredAt: {
+      type: Date,
     },
   },
   {
     timestamps: true,
   },
 );
-
-orderSchema.index({ createdAt: -1, status: 1 });
 
 export const Order = mongoose.model("Order", orderSchema);

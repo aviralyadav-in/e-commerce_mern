@@ -21,7 +21,6 @@ categoryRouter.get("/:id/products", getCategoryProducts);
 
 categoryRouter.post(
   "/admin",
-  protectedRoute,
   adminRoute,
   categoryUpload.single("image"),
   createCategory,
@@ -29,12 +28,11 @@ categoryRouter.post(
 
 categoryRouter.put(
   "/admin/:id",
-  protectedRoute,
   adminRoute,
   categoryUpload.single("image"),
   updateCategory,
 );
 
-categoryRouter.delete("/admin/:id", protectedRoute, adminRoute, deleteCategory);
+categoryRouter.delete("/admin/:id", adminRoute, deleteCategory);
 
 export default categoryRouter;

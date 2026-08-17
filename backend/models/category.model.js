@@ -5,33 +5,31 @@ const categorySchema = new mongoose.Schema(
     name: {
       type: String,
       required: [true, "Category name is required"],
-      unique: true,
       trim: true,
+      unique: true,
       minlength: [2, "Category name must be at least 2 characters"],
-      maxlength: [50, "Category name cannot exceed 50 characters"],
+      maxlength: [100, "Category name cannot exceed 100 characters"],
     },
-
+    slug: {
+      type: String,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      required: true,
+    },
     description: {
       type: String,
       trim: true,
-      maxlength: [1000, "Description cannot exceed 1000 characters"],
+      maxlength: [500, "Description cannot exceed 500 characters"],
       default: "",
     },
-
     image: {
       type: String,
-      trim: true,
       default: "",
     },
-
-    status: {
-      type: String,
-      enum: {
-        values: ["active", "inactive"],
-        message: "{VALUE} is not a valid status",
-      },
-      default: "active",
-      index: true,
+    isActive: {
+      type: Boolean,
+      default: true,
     },
   },
   {

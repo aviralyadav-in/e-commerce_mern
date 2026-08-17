@@ -19,20 +19,26 @@ productRouter.get("/:id", getProductById);
 
 productRouter.post(
   "/admin",
-  protectedRoute,
   adminRoute,
-  productUpload.array("images", 5), // ✅ Multiple images - max 5
+  productUpload.fields([
+    { name: "desktopImages", maxCount: 5 },
+    { name: "tabletImages", maxCount: 5 },
+    { name: "mobileImages", maxCount: 5 },
+  ]),
   createProduct,
 );
 
 productRouter.put(
   "/admin/:id",
-  protectedRoute,
   adminRoute,
-  productUpload.array("images", 5), // ✅ Multiple images - max 5
+  productUpload.fields([
+    { name: "desktopImages", maxCount: 5 },
+    { name: "tabletImages", maxCount: 5 },
+    { name: "mobileImages", maxCount: 5 },
+  ]),
   updateProduct,
 );
 
-productRouter.delete("/admin/:id", protectedRoute, adminRoute, deleteProduct);
+productRouter.delete("/admin/:id", adminRoute, deleteProduct);
 
 export default productRouter;

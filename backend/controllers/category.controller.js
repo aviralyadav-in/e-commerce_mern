@@ -1,14 +1,14 @@
 import fs from "fs/promises";
 import path from "path";
 import mongoose from "mongoose";
-
+import { categoryValidationSchema } from "../validators/categoryValidate.js";
 import { Category } from "../models/category.model.js";
 import { Product } from "../models/product.model.js";
-import { categorySchema } from "../validators/category.validator.js";
 
 const deleteImageFile = async (imagePath) => {
   if (!imagePath) return;
 
+  // Do not delete external images
   if (imagePath.startsWith("http")) return;
 
   try {
@@ -21,57 +21,73 @@ const deleteImageFile = async (imagePath) => {
   }
 };
 
+const escapeRegex = (value) => {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+/* =========================================================
+   CREATE CATEGORY
+========================================================= */
 export const createCategory = async (req, res) => {
   try {
-    let image = "";
-    if (req.file) {
-      image = `/uploads/categories/${req.file.filename}`;
-    } else if (req.body.image) {
-      image = req.body.image;
-    }
+    /* -------------------------
+       Fix: FormData Boolean Conversion
+    ------------------------- */
+    // multipart/form-data me boolean string format ('true'/'false') me aata hai,
+    // isko parse karna zaroori hai warna Zod fail ho jayega.
+    if (req.body.isActive === "true") req.body.isActive = true;
+    if (req.body.isActive === "false") req.body.isActive = false;
 
-    const categoryData = {
-      name: req.body.name,
-      description: req.body.description || "",
-      image,
-      status: req.body.status || "active",
-    };
-
-    const result = categorySchema.safeParse(categoryData);
+    /* -------------------------
+       Zod Validation (Only Body)
+    ------------------------- */
+    const result = categoryValidationSchema.safeParse(req.body);
 
     if (!result.success) {
       if (req.file) {
-        await deleteImageFile(image);
+        await deleteImageFile(`/uploads/categories/${req.file.filename}`);
       }
-
       return res.status(400).json({
         message: result.error.issues[0].message,
+        errors: result.error.flatten().fieldErrors,
       });
     }
 
-    const { name, description } = result.data;
+    // Fix: parentCategory hata diya gaya hai kyunki schema me nahi hai
+    const { name, slug, description, isActive } = result.data;
 
+    /* -------------------------
+       Duplicate Check (Name OR Slug)
+    ------------------------- */
     const existingCategory = await Category.findOne({
-      name: {
-        $regex: new RegExp(`^${name}$`, "i"),
-      },
-    }).lean();
+      $or: [
+        { name: { $regex: new RegExp(`^${escapeRegex(name)}$`, "i") } },
+        { slug: slug },
+      ],
+    });
 
     if (existingCategory) {
-      if (req.file) {
-        await deleteImageFile(image);
-      }
-
+      if (req.file)
+        await deleteImageFile(`/uploads/categories/${req.file.filename}`);
       return res.status(409).json({
-        message: "Category with this name already exists",
+        message:
+          existingCategory.slug === slug
+            ? "Category slug already exists"
+            : "Category name already exists",
       });
     }
+
+    /* -------------------------
+       Handle Image & Create
+    ------------------------- */
+    const imageUrl = req.file ? `/uploads/categories/${req.file.filename}` : "";
 
     const category = await Category.create({
       name,
-      description,
-      image,
-      status: result.data.status,
+      slug,
+      description: description || "",
+      isActive: isActive !== undefined ? isActive : true,
+      image: imageUrl,
     });
 
     return res.status(201).json({
@@ -83,16 +99,18 @@ export const createCategory = async (req, res) => {
     if (req.file) {
       await deleteImageFile(`/uploads/categories/${req.file.filename}`);
     }
-
-    return res.status(500).json({
-      message: "Internal Server Error",
-    });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
+/* =========================================================
+   GET ALL CATEGORIES
+========================================================= */
 export const getCategories = async (req, res) => {
   try {
-    const categories = await Category.find().sort({ createdAt: -1 }).lean();
+    const categories = await Category.find({ isActive: true }).sort({
+      createdAt: -1,
+    });
 
     return res.status(200).json({
       message: "Categories fetched successfully",
@@ -101,12 +119,13 @@ export const getCategories = async (req, res) => {
     });
   } catch (error) {
     console.error("Get Categories Error:", error);
-    return res.status(500).json({
-      message: "Internal Server Error",
-    });
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
+/* =========================================================
+   GET CATEGORY BY ID
+========================================================= */
 export const getCategoryById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -115,7 +134,7 @@ export const getCategoryById = async (req, res) => {
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
-    const category = await Category.findById(id).lean();
+    const category = await Category.findById(id);
 
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
@@ -131,6 +150,9 @@ export const getCategoryById = async (req, res) => {
   }
 };
 
+/* =========================================================
+   UPDATE CATEGORY
+========================================================= */
 export const updateCategory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -140,65 +162,73 @@ export const updateCategory = async (req, res) => {
     }
 
     const category = await Category.findById(id);
-
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    let newImage = category.image;
+    /* -------------------------
+       Fix: FormData Boolean Conversion
+    ------------------------- */
+    if (req.body.isActive === "true") req.body.isActive = true;
+    if (req.body.isActive === "false") req.body.isActive = false;
 
-    if (req.file) {
-      newImage = `/uploads/categories/${req.file.filename}`;
-    } else if (req.body.image !== undefined) {
-      newImage = req.body.image;
-    }
-
-    const updateData = {
-      ...req.body,
-      image: newImage,
-    };
-
-    const result = categorySchema.partial().safeParse(updateData);
+    /* -------------------------
+       Zod Partial Validation
+    ------------------------- */
+    const result = categoryValidationSchema.partial().safeParse(req.body);
 
     if (!result.success) {
-      if (req.file) {
-        await deleteImageFile(newImage);
-      }
+      if (req.file)
+        await deleteImageFile(`/uploads/categories/${req.file.filename}`);
       return res.status(400).json({
         message: result.error.issues[0].message,
       });
     }
 
-    if (
-      result.data.name &&
-      result.data.name.toLowerCase() !== category.name.toLowerCase()
-    ) {
+    const updateData = { ...result.data };
+
+    /* -------------------------
+       Duplicate Check (Excluding self)
+    ------------------------- */
+    if (updateData.name || updateData.slug) {
+      const orConditions = [];
+      if (updateData.name)
+        orConditions.push({
+          name: {
+            $regex: new RegExp(`^${escapeRegex(updateData.name)}$`, "i"),
+          },
+        });
+      if (updateData.slug) orConditions.push({ slug: updateData.slug });
+
       const existingCategory = await Category.findOne({
-        name: {
-          $regex: new RegExp(`^${result.data.name}$`, "i"),
-        },
-      }).lean();
+        $or: orConditions,
+        _id: { $ne: id },
+      });
 
       if (existingCategory) {
-        if (req.file) {
-          await deleteImageFile(newImage);
-        }
-        return res.status(409).json({
-          message: "Category with this name already exists",
-        });
+        if (req.file)
+          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+        return res
+          .status(409)
+          .json({ message: "Category name or slug already in use" });
+      }
+    }
+
+    /* -------------------------
+       Handle Image Replacement
+    ------------------------- */
+    if (req.file) {
+      updateData.image = `/uploads/categories/${req.file.filename}`;
+      if (category.image && updateData.image !== category.image) {
+        await deleteImageFile(category.image);
       }
     }
 
     const updatedCategory = await Category.findByIdAndUpdate(
       id,
-      { $set: result.data },
-      { returnDocument: "after", runValidators: true },
-    ).lean();
-
-    // Agar nayi image aayi hai aur purani local image thi, toh purani delete kar do
-    if (newImage !== category.image && category.image) {
-      await deleteImageFile(category.image);
-    }
+      { $set: updateData },
+      { new: true, runValidators: true },
+    );
 
     return res.status(200).json({
       message: "Category updated successfully",
@@ -206,13 +236,15 @@ export const updateCategory = async (req, res) => {
     });
   } catch (error) {
     console.error("Update Category Error:", error);
-    if (req.file) {
+    if (req.file)
       await deleteImageFile(`/uploads/categories/${req.file.filename}`);
-    }
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
+/* =========================================================
+   DELETE CATEGORY (SOFT DELETE)
+========================================================= */
 export const deleteCategory = async (req, res) => {
   try {
     const { id } = req.params;
@@ -221,35 +253,38 @@ export const deleteCategory = async (req, res) => {
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
-    const category = await Category.findById(id).lean();
-
+    const category = await Category.findById(id);
     if (!category) {
       return res.status(404).json({ message: "Category not found" });
     }
 
-    const productsCount = await Product.countDocuments({ category: id });
+    /* -------------------------
+       Fix: Use categoryId instead of category
+    ------------------------- */
+    // Aapke product schema me category ka reference "categoryId" hai
+    const productsCount = await Product.countDocuments({
+      categoryId: id,
+      isActive: true,
+    });
 
     if (productsCount > 0) {
       return res.status(409).json({
-        message: `Cannot delete category. It is linked to ${productsCount} product(s).`,
+        message: `Cannot delete category. It is linked to ${productsCount} active product(s).`,
       });
     }
 
-    await Category.findByIdAndDelete(id);
+    await Category.findByIdAndUpdate(id, { isActive: false });
 
-    if (category.image) {
-      await deleteImageFile(category.image);
-    }
-
-    return res.status(200).json({
-      message: "Category deleted successfully",
-    });
+    return res.status(200).json({ message: "Category deleted successfully" });
   } catch (error) {
     console.error("Delete Category Error:", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
 
+/* =========================================================
+   GET CATEGORY PRODUCTS
+========================================================= */
 export const getCategoryProducts = async (req, res) => {
   try {
     const { id } = req.params;
@@ -258,16 +293,19 @@ export const getCategoryProducts = async (req, res) => {
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
-    const category = await Category.findById(id).lean();
-
-    if (!category) {
-      return res.status(404).json({ message: "Invalid category ID" });
+    const category = await Category.findById(id);
+    if (!category || !category.isActive) {
+      return res
+        .status(404)
+        .json({ message: "Category not found or inactive" });
     }
 
-    const products = await Product.find({ category: id })
-      .populate("category", "name image")
-      .sort({ createdAt: -1 })
-      .lean();
+    /* -------------------------
+       Fix: Use categoryId and populate categoryId
+    ------------------------- */
+    const products = await Product.find({ categoryId: id, isActive: true })
+      .populate("categoryId", "name image") // .populate ko bhi categoryId kar diya gaya hai
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       message: "Category products fetched successfully",
