@@ -30,10 +30,6 @@ const getUploadedFilesPaths = (files) => {
     paths.push(
       ...files.desktopImages.map((f) => `/uploads/products/${f.filename}`),
     );
-  if (files.tabletImages)
-    paths.push(
-      ...files.tabletImages.map((f) => `/uploads/products/${f.filename}`),
-    );
   if (files.mobileImages)
     paths.push(
       ...files.mobileImages.map((f) => `/uploads/products/${f.filename}`),
@@ -43,16 +39,11 @@ const getUploadedFilesPaths = (files) => {
 
 // Request se images extract karke schema format me badalna
 const extractImages = (req) => {
-  const images = { desktop: [], tablet: [], mobile: [] };
+  const images = { desktop: [], mobile: [] };
 
   if (req.files) {
     if (req.files.desktopImages) {
       images.desktop = req.files.desktopImages.map(
-        (file) => `/uploads/products/${file.filename}`,
-      );
-    }
-    if (req.files.tabletImages) {
-      images.tablet = req.files.tabletImages.map(
         (file) => `/uploads/products/${file.filename}`,
       );
     }
@@ -266,7 +257,6 @@ export const updateProduct = async (req, res) => {
     if (!req.body.images) req.body.images = {};
     if (newImages.desktop.length > 0)
       req.body.images.desktop = newImages.desktop;
-    if (newImages.tablet.length > 0) req.body.images.tablet = newImages.tablet;
     if (newImages.mobile.length > 0) req.body.images.mobile = newImages.mobile;
 
     // 3. Partial Zod Validation
@@ -284,7 +274,6 @@ export const updateProduct = async (req, res) => {
     if (updateData.images) {
       updateData.images = {
         desktop: updateData.images.desktop || product.images.desktop,
-        tablet: updateData.images.tablet || product.images.tablet,
         mobile: updateData.images.mobile || product.images.mobile,
       };
     }
@@ -316,8 +305,6 @@ export const updateProduct = async (req, res) => {
     // 6. Nayi images aane par purani images delete karein
     if (newImages.desktop.length > 0)
       await Promise.all(product.images.desktop.map(deleteImageFile));
-    if (newImages.tablet.length > 0)
-      await Promise.all(product.images.tablet.map(deleteImageFile));
     if (newImages.mobile.length > 0)
       await Promise.all(product.images.mobile.map(deleteImageFile));
 
@@ -355,7 +342,6 @@ export const deleteProduct = async (req, res) => {
     // Product ki saari nested local images delete karo
     const allImages = [
       ...(product.images?.desktop || []),
-      ...(product.images?.tablet || []),
       ...(product.images?.mobile || []),
     ];
     await Promise.all(allImages.map((img) => deleteImageFile(img)));

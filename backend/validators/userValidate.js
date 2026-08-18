@@ -36,13 +36,7 @@ export const userValidationSchema = z.object({
       message: "Please enter a valid Indian phone number",
     }),
 
-  avatar: z
-    .object({
-      public_id: z.string().default(""),
-      url: z.string().default(""),
-    })
-    .optional()
-    .default({ public_id: "", url: "" }),
+  avatar: z.string().optional().default(""),
 
   gender: z
     .enum(["male", "female", "other", "prefer_not_to_say"], {
@@ -88,12 +82,7 @@ export const updateProfileSchema = z.object({
     })
     .optional(),
 
-  avatar: z
-    .object({
-      public_id: z.string().optional(),
-      url: z.string().optional(),
-    })
-    .optional(),
+  avatar: z.string().optional(),
 
   gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
 

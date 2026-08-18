@@ -45,15 +45,6 @@ export const productValidationSchema = z.object({
       )
       .min(1, "Please provide at least one desktop image."), // Mandatory
 
-    tablet: z
-      .array(
-        z.string({
-          invalid_type_error: "Tablet image URL must be a string",
-        }),
-      )
-      .optional()
-      .default([]), // Optional with default empty array
-
     mobile: z
       .array(
         z.string({

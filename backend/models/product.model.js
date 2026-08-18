@@ -47,13 +47,9 @@ const productSchema = new mongoose.Schema(
           },
         ],
       },
-      tablet: {
-        type: [String],
-        default: [], // Optional: Agar upload nahi ki, toh empty array rahega
-      },
       mobile: {
         type: [String],
-        default: [], // Optional: Agar upload nahi ki, toh empty array rahega
+        default: [],
       },
     },
 

@@ -22,7 +22,6 @@ productRouter.post(
   adminRoute,
   productUpload.fields([
     { name: "desktopImages", maxCount: 5 },
-    { name: "tabletImages", maxCount: 5 },
     { name: "mobileImages", maxCount: 5 },
   ]),
   createProduct,
@@ -33,7 +32,6 @@ productRouter.put(
   adminRoute,
   productUpload.fields([
     { name: "desktopImages", maxCount: 5 },
-    { name: "tabletImages", maxCount: 5 },
     { name: "mobileImages", maxCount: 5 },
   ]),
   updateProduct,
