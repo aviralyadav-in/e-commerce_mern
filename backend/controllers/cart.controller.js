@@ -207,3 +207,49 @@ export const clearCart = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+/* =========================================================
+   5. GET ALL CARTS (Admin Side) - Sabhi users ke carts
+========================================================= */
+export const getAllCarts = async (req, res) => {
+  try {
+    const carts = await Cart.find()
+      .populate("user", "name email phone")
+      .populate("items.product", "name images price discountPrice")
+      .sort({ updatedAt: -1 });
+
+    // Flat structure banao taaki admin table me easily dikha sake
+    const flatData = [];
+    carts.forEach((cart) => {
+      if (cart.user && cart.items.length > 0) {
+        cart.items.forEach((item) => {
+          if (item.product) {
+            flatData.push({
+              _id: `${cart._id}-${item.product._id}`,
+              userName: cart.user.name,
+              userEmail: cart.user.email,
+              userPhone: cart.user.phone || "N/A",
+              productName: item.product.name,
+              productPrice: item.product.price,
+              productDiscountPrice: item.product.discountPrice,
+              productImage:
+                item.product.images?.desktop?.[0] || "",
+              quantity: item.quantity,
+              itemTotal: item.price * item.quantity,
+              addedAt: cart.updatedAt,
+            });
+          }
+        });
+      }
+    });
+
+    return res.status(200).json({
+      message: "All carts fetched successfully",
+      totalEntries: flatData.length,
+      carts: flatData,
+    });
+  } catch (error) {
+    console.error("Get All Carts Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};

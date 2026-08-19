@@ -6,6 +6,8 @@ import productsReducer from "../features/products/productsSlice";
 import ordersReducer from "../features/orders/ordersSlice";
 import bannersReducer from "../features/banners/bannersSlice";
 import couponsReducer from "../features/coupons/couponsSlice";
+import wishlistReducer from "../features/wishlist/wishlistSlice";
+import adminCartReducer from "../features/adminCart/adminCartSlice";
 
 export const store = configureStore({
   reducer: {
@@ -16,7 +18,10 @@ export const store = configureStore({
     orders: ordersReducer,
     banners: bannersReducer,
     coupons: couponsReducer,
+    wishlist: wishlistReducer,
+    adminCart: adminCartReducer,
   },
 });
 
 export default store;
+

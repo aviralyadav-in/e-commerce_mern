@@ -4,16 +4,25 @@ import {
   getCart,
   removeFromCart,
   clearCart,
+  getAllCarts,
 } from "../controllers/cart.controller.js";
 import { protectedRoute } from "../middleware/auth.middleware.js";
+import { adminRoute } from "../middleware/admin.middleware.js";
 
 const cartRouter = express.Router();
 
-cartRouter.use(protectedRoute);
+// ==========================================
+// ADMIN CART ROUTES (Admin middleware lagega)
+// ==========================================
+
+// 5. Get All Users' Carts (GET /api/cart/admin/all) — Admin Only
+cartRouter.get("/admin/all", adminRoute, getAllCarts);
 
 // ==========================================
-// CART ROUTES
+// USER CART ROUTES (Protected middleware lagega)
 // ==========================================
+
+cartRouter.use(protectedRoute);
 
 // 1. Get User Cart (GET /api/cart)
 cartRouter.get("/", getCart);
@@ -28,3 +37,4 @@ cartRouter.delete("/remove/:productId", removeFromCart);
 cartRouter.delete("/clear", clearCart);
 
 export default cartRouter;
+

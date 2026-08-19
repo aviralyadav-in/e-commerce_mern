@@ -12,6 +12,8 @@ import ProductsPage from "./pages/ProductsPage";
 import OrdersPage from "./pages/OrdersPage";
 import BannersPage from "./pages/BannersPage";
 import CouponsPage from "./pages/CouponsPage";
+import WishlistPage from "./pages/WishlistPage";
+import AdminCartPage from "./pages/AdminCartPage";
 
 function App() {
   return (
@@ -39,6 +41,8 @@ function App() {
         <Route path="orders" element={<OrdersPage />} />
         <Route path="banners" element={<BannersPage />} />
         <Route path="coupons" element={<CouponsPage />} />
+        <Route path="wishlists" element={<WishlistPage />} />
+        <Route path="carts" element={<AdminCartPage />} />
       </Route>
 
       {/* 404 Route - Agar koi galat URL daale, toh usko wapas dashboard bhejo */}
