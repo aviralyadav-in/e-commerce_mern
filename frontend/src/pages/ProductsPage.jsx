@@ -5,9 +5,9 @@ import {
   fetchProductsByCategory,
   setSelectedCategory,
 } from "../features/products/productsSlice";
-import { fetchCategories } from "../features/categories/categoriesSlice"; // Categories dropdown ke liye chahiye
+import { fetchCategories } from "../features/categories/categoriesSlice";
+import { exportAllProductsToExcel } from "../utils/exportProductToExcel";
 
-// Components
 import ProductTable from "../components/products/ProductTable";
 import ProductModal from "../components/products/ProductModal";
 import Loader from "../components/common/Loader";
@@ -22,16 +22,12 @@ const ProductsPage = () => {
     (state) => state.categories,
   );
 
-  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editData, setEditData] = useState(null);
 
-  // Initial Data Fetch
   useEffect(() => {
-    // Categories hamesha chahiye dropdown ke liye
     if (categories.length === 0) dispatch(fetchCategories());
 
-    // Check karo konsi API call karni hai
     if (selectedCategoryId) {
       dispatch(fetchProductsByCategory(selectedCategoryId));
     } else {
@@ -39,10 +35,8 @@ const ProductsPage = () => {
     }
   }, [dispatch, selectedCategoryId]);
 
-  // Handlers
   const handleCategoryFilter = (e) => {
     const catId = e.target.value;
-    // Agar empty string aayi hai matlab "All Categories"
     dispatch(setSelectedCategory(catId === "" ? null : catId));
   };
 
@@ -56,9 +50,22 @@ const ProductsPage = () => {
     setIsModalOpen(true);
   };
 
+  const handleExportAll = () => {
+    if (!products.length) {
+      alert("No products available to export.");
+      return;
+    }
+    const getCategoryName = (id) => {
+      if (typeof id === "object" && id?.name) return id.name;
+      const catId = typeof id === "object" ? id?._id : id;
+      const cat = categories.find((c) => c._id === catId);
+      return cat ? cat.name : "Unknown Category";
+    };
+    exportAllProductsToExcel(products, getCategoryName);
+  };
+
   return (
     <div className="space-y-6">
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Products</h1>
@@ -67,9 +74,7 @@ const ProductsPage = () => {
           </p>
         </div>
 
-        {/* Controls: Filter Dropdown + Add Button */}
         <div className="flex flex-col sm:flex-row items-center gap-3">
-          {/* Category Filter Dropdown */}
           <select
             value={selectedCategoryId || ""}
             onChange={handleCategoryFilter}
@@ -83,23 +88,23 @@ const ProductsPage = () => {
             ))}
           </select>
 
-          {/* Add Product Button */}
+          <button
+            onClick={handleExportAll}
+            title="Download all products as Excel"
+            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-sm shadow-emerald-200"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Export Excel
+          </button>
+
           <button
             onClick={handleOpenAdd}
             className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-sm shadow-indigo-200"
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
             Add Product
           </button>

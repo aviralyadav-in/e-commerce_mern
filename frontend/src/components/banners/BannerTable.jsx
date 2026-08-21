@@ -1,6 +1,7 @@
 import React from "react";
 import { useDispatch } from "react-redux";
 import { deleteBanner } from "../../features/banners/bannersSlice";
+import { getAssetUrl } from "../../utils/assetUrl";
 
 const BannerTable = ({ banners, onEdit }) => {
   const dispatch = useDispatch();
@@ -36,7 +37,7 @@ const BannerTable = ({ banners, onEdit }) => {
                     <img
                       src={
                         banner.image
-                          ? `http://localhost:5000${banner.image}`
+                          ? getAssetUrl(banner.image)
                           : "https://via.placeholder.com/300x100"
                       }
                       alt={banner.title}

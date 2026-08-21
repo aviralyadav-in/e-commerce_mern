@@ -1,19 +1,34 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Navigate } from "react-router";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { checkAuth } from "../../features/auth/authSlice";
+import Loader from "./Loader";
 
 const ProtectedRoute = ({ children }) => {
-  // Redux store se authentication status check karenge
-  const { isAuthenticated } = useSelector((state) => state.auth);
+  const dispatch = useDispatch();
+  const { isAuthenticated, authChecked, loading } = useSelector(
+    (state) => state.auth,
+  );
 
-  // Agar admin authenticated nahi hai toh
-  // login page par bhej do
+  useEffect(() => {
+    if (!authChecked) {
+      dispatch(checkAuth());
+    }
+  }, [authChecked, dispatch]);
+
+  // Cookie se session verify hone tak wait
+  if (!authChecked || (loading && !authChecked)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader />
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  // Agar authenticated hai toh
-  // children (requested page) render karo
   return children;
 };
 

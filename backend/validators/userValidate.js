@@ -88,3 +88,43 @@ export const updateProfileSchema = z.object({
 
   dateOfBirth: z.coerce.date().nullable().optional(),
 });
+
+// Admin panel se user update — password optional
+export const adminUpdateUserSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(2, "Name must be at least 2 characters")
+    .max(50, "Name cannot exceed 50 characters")
+    .optional(),
+
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(
+      /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+      "Please enter a valid email",
+    )
+    .optional(),
+
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .optional()
+    .or(z.literal("")),
+
+  phone: z
+    .string()
+    .trim()
+    .refine((val) => val === "" || /^[6-9]\d{9}$/.test(val), {
+      message: "Please enter a valid Indian phone number",
+    })
+    .optional(),
+
+  avatar: z.string().optional(),
+
+  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
+
+  dateOfBirth: z.coerce.date().nullable().optional(),
+});

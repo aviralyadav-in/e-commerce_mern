@@ -27,6 +27,13 @@ export const categoryValidationSchema = z.object({
 
   image: z.string().optional().default(""),
 
+  subCategories: z
+    .array(z.enum(["Men", "Women"], {
+      errorMap: () => ({ message: "Sub-category must be Men or Women" }),
+    }))
+    .min(1, "Select at least one sub-category (Men or Women)")
+    .default(["Men", "Women"]),
+
   isActive: z
     .boolean({
       invalid_type_error: "isActive must be a boolean",

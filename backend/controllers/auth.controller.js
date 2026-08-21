@@ -172,6 +172,42 @@ export const adminLogin = async (req, res) => {
 };
 
 // ==========================================
+// 3b. GET CURRENT ADMIN (cookie se)
+// ==========================================
+export const getAdminMe = async (req, res) => {
+  try {
+    return res.status(200).json({
+      message: "Admin session active",
+      user: req.admin,
+    });
+  } catch (error) {
+    console.error("Get Admin Me Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// ==========================================
+// 3c. ADMIN LOGOUT (cookie clear)
+// ==========================================
+export const adminLogout = async (req, res) => {
+  try {
+    res.clearCookie("token", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+    });
+
+    return res.status(200).json({
+      message: "Admin logged out successfully",
+    });
+  } catch (error) {
+    console.error("Admin Logout Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+// ==========================================
 // 4. LOGOUT CONTROLLER
 // ==========================================
 export const logout = async (req, res) => {

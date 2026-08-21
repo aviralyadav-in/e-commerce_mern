@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { NavLink, useLocation } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
-import { logout } from "../../features/auth/authSlice";
+import { logoutAdmin } from "../../features/auth/authSlice";
 import { useNavigate } from "react-router";
+import ConfirmDialog from "../common/ConfirmDialog";
 
 // Navigation Links Data
 const navLinks = [
@@ -183,11 +184,17 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { admin } = useSelector((state) => state.auth);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Logout Handler
   const handleLogout = () => {
-    dispatch(logout());
-    navigate("/login");
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    dispatch(logoutAdmin()).finally(() => {
+      setShowLogoutConfirm(false);
+      navigate("/login");
+    });
   };
 
   return (
@@ -324,6 +331,17 @@ const Sidebar = ({ isOpen, setIsOpen }) => {
           </button>
         </div>
       </aside>
+
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        title="Log out?"
+        message="Are you sure you want to log out? You will need to sign in again to access the admin panel."
+        confirmLabel="Log out"
+        cancelLabel="Stay signed in"
+        variant="danger"
+        onConfirm={confirmLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </>
   );
 };

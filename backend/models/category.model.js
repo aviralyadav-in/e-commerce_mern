@@ -27,6 +27,22 @@ const categorySchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    // Men / Women sub-categories under this category
+    subCategories: {
+      type: [
+        {
+          type: String,
+          enum: ["Men", "Women"],
+        },
+      ],
+      default: ["Men", "Women"],
+      validate: {
+        validator: function (val) {
+          return Array.isArray(val) && val.length > 0;
+        },
+        message: "Select at least one sub-category (Men or Women).",
+      },
+    },
     isActive: {
       type: Boolean,
       default: true,

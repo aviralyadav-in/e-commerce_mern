@@ -1,79 +1,95 @@
-import React from "react";
+import React, { useState } from "react";
+import { useDispatch } from "react-redux";
+import { deleteUser } from "../../features/users/usersSlice";
+import ConfirmDialog from "../common/ConfirmDialog";
 
-const UserTable = ({ users }) => {
+const UserTable = ({ users, onEdit }) => {
+  const dispatch = useDispatch();
+  const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    dispatch(deleteUser(deleteTarget._id));
+    setDeleteTarget(null);
+  };
+
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-              <th className="px-6 py-4 font-medium">Customer</th>
-              <th className="px-6 py-4 font-medium">Contact</th>
-              <th className="px-6 py-4 font-medium">Gender</th>
-              <th className="px-6 py-4 font-medium">Joined Date</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 text-sm">
-            {users.length > 0 ? (
-              users.map((user) => (
-                <tr
-                  key={user._id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  {/* Name & ID Column */}
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-gray-900">
-                        {user.name}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        ID: {user._id}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Email & Phone Column */}
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col space-y-1">
-                      <div className="flex items-center gap-2 text-gray-600">
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                          />
-                        </svg>
-                        <span>{user.email}</span>
+    <>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                <th className="px-6 py-4 font-medium">Customer</th>
+                <th className="px-6 py-4 font-medium">Contact</th>
+                <th className="px-6 py-4 font-medium">Gender</th>
+                <th className="px-6 py-4 font-medium">Joined Date</th>
+                <th className="px-6 py-4 font-medium text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-sm">
+              {users.length > 0 ? (
+                users.map((user) => (
+                  <tr
+                    key={user._id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
+                          {user.name?.charAt(0).toUpperCase() || "U"}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-gray-900 truncate">
+                            {user.name}
+                          </span>
+                          <span className="text-xs text-gray-400 truncate">
+                            ID: {user._id}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-gray-500 text-xs">
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                          />
-                        </svg>
-                        <span>{user.phone || "N/A"}</span>
-                      </div>
-                    </div>
-                  </td>
+                    </td>
 
-                  {/* Gender Column — FIX: Address field User model mein nahi hai, gender dikhao */}
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center gap-2 text-gray-600">
+                          <svg
+                            className="w-4 h-4 shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                            />
+                          </svg>
+                          <span className="truncate">{user.email}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-gray-500 text-xs">
+                          <svg
+                            className="w-4 h-4 shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
+                            />
+                          </svg>
+                          <span>{user.phone || "N/A"}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span
+                        className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize
                         ${
                           user.gender === "male"
                             ? "bg-blue-50 text-blue-700"
@@ -84,32 +100,94 @@ const UserTable = ({ users }) => {
                                 : "bg-gray-100 text-gray-500"
                         }
                       `}
-                    >
-                      {user.gender === "prefer_not_to_say"
-                        ? "Not Specified"
-                        : user.gender || "N/A"}
-                    </span>
-                  </td>
+                      >
+                        {user.gender === "prefer_not_to_say"
+                          ? "Not Specified"
+                          : user.gender || "N/A"}
+                      </span>
+                    </td>
 
-                  {/* Joined Date Column */}
-                  <td className="px-6 py-4 text-gray-500 font-medium">
-                    {user.createdAt
-                      ? new Date(user.createdAt).toLocaleDateString()
-                      : "Unknown"}
+                    <td className="px-6 py-4 text-gray-500 font-medium">
+                      {user.createdAt
+                        ? new Date(user.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })
+                        : "Unknown"}
+                    </td>
+
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => onEdit(user)}
+                          title="Edit user"
+                          className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setDeleteTarget(user)}
+                          title="Delete user"
+                          className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                        >
+                          <svg
+                            className="w-4 h-4"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                            />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                    No users found. Add a customer to get started.
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
-                  No users found in the database.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete user?"
+        message={
+          deleteTarget
+            ? `Are you sure you want to delete "${deleteTarget.name}"? Their cart and wishlist will also be removed. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete"
+        cancelLabel="Cancel"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </>
   );
 };
 

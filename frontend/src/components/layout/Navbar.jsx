@@ -1,7 +1,8 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
-import { logout } from "../../features/auth/authSlice";
+import { logoutAdmin } from "../../features/auth/authSlice";
+import ConfirmDialog from "../common/ConfirmDialog";
 
 // Har route ka title define kiya hai
 const pageTitles = {
@@ -19,14 +20,20 @@ const Navbar = ({ isOpen, setIsOpen }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { admin } = useSelector((state) => state.auth);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Current page ka title nikalo
   const currentTitle = pageTitles[location.pathname] || "Dashboard";
 
-  // Logout Handler
   const handleLogout = () => {
-    dispatch(logout());
-    navigate("/login");
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = () => {
+    dispatch(logoutAdmin()).finally(() => {
+      setShowLogoutConfirm(false);
+      navigate("/login");
+    });
   };
 
   return (
@@ -133,6 +140,17 @@ const Navbar = ({ isOpen, setIsOpen }) => {
           Logout
         </button>
       </div>
+
+      <ConfirmDialog
+        isOpen={showLogoutConfirm}
+        title="Log out?"
+        message="Are you sure you want to log out? You will need to sign in again to access the admin panel."
+        confirmLabel="Log out"
+        cancelLabel="Stay signed in"
+        variant="danger"
+        onConfirm={confirmLogout}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </header>
   );
 };

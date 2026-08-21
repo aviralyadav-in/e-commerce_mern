@@ -1,4 +1,5 @@
 import React from "react";
+import { getAssetUrl } from "../../utils/assetUrl";
 
 const WishlistTable = ({ wishlists }) => {
   return (
@@ -43,11 +44,7 @@ const WishlistTable = ({ wishlists }) => {
                     <div className="flex items-center gap-3">
                       {item.productImage ? (
                         <img
-                          src={
-                            item.productImage.startsWith("http")
-                              ? item.productImage
-                              : `http://localhost:5000${item.productImage}`
-                          }
+                          src={getAssetUrl(item.productImage)}
                           alt={item.productName}
                           className="w-10 h-10 rounded-lg object-cover border border-gray-200"
                         />

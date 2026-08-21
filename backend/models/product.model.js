@@ -34,6 +34,16 @@ const productSchema = new mongoose.Schema(
       default: "",
     },
 
+    // Men / Women / Unisex under parent category
+    subCategory: {
+      type: String,
+      enum: {
+        values: ["Men", "Women", "Unisex"],
+        message: "Sub-category must be Men, Women, or Unisex",
+      },
+      default: "Unisex",
+    },
+
     // 🔥 IMAGE SCHEMA UPDATED HERE 🔥
     images: {
       desktop: {

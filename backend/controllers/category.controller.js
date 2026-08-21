@@ -38,6 +38,18 @@ export const createCategory = async (req, res) => {
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
+    // FormData me subCategories JSON string / single value aa sakta hai
+    if (typeof req.body.subCategories === "string") {
+      try {
+        const parsed = JSON.parse(req.body.subCategories);
+        req.body.subCategories = Array.isArray(parsed)
+          ? parsed
+          : [req.body.subCategories];
+      } catch {
+        req.body.subCategories = [req.body.subCategories];
+      }
+    }
+
     /* -------------------------
        Zod Validation (Only Body)
     ------------------------- */
@@ -54,7 +66,7 @@ export const createCategory = async (req, res) => {
     }
 
     // Fix: parentCategory hata diya gaya hai kyunki schema me nahi hai
-    const { name, slug, description, isActive } = result.data;
+    const { name, slug, description, isActive, subCategories } = result.data;
 
     /* -------------------------
        Duplicate Check (Name OR Slug)
@@ -87,6 +99,7 @@ export const createCategory = async (req, res) => {
       slug,
       description: description || "",
       isActive: isActive !== undefined ? isActive : true,
+      subCategories: subCategories?.length ? subCategories : ["Men", "Women"],
       image: imageUrl,
     });
 
@@ -171,6 +184,17 @@ export const updateCategory = async (req, res) => {
     ------------------------- */
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
+
+    if (typeof req.body.subCategories === "string") {
+      try {
+        const parsed = JSON.parse(req.body.subCategories);
+        req.body.subCategories = Array.isArray(parsed)
+          ? parsed
+          : [req.body.subCategories];
+      } catch {
+        req.body.subCategories = [req.body.subCategories];
+      }
+    }
 
     /* -------------------------
        Zod Partial Validation

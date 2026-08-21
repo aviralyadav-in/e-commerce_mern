@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router";
-import { loginAdmin, clearAuthError } from "../features/auth/authSlice";
+import { loginAdmin, clearAuthError, checkAuth } from "../features/auth/authSlice";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -9,23 +9,39 @@ const LoginPage = () => {
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { loading, error, isAuthenticated } = useSelector(
+  const { loading, error, isAuthenticated, authChecked } = useSelector(
     (state) => state.auth,
   );
 
+  // Refresh pe cookie session check
   useEffect(() => {
-    if (isAuthenticated) {
+    if (!authChecked) {
+      dispatch(checkAuth());
+    }
+  }, [authChecked, dispatch]);
+
+  useEffect(() => {
+    if (authChecked && isAuthenticated) {
       navigate("/dashboard", { replace: true });
     }
     return () => {
       dispatch(clearAuthError());
     };
-  }, [isAuthenticated, navigate, dispatch]);
+  }, [isAuthenticated, authChecked, navigate, dispatch]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     dispatch(loginAdmin({ email, password }));
   };
+
+  // Session check hone tak blank/spinner
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+        <span className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     // Deep Blue/Black professional background

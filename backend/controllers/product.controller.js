@@ -268,10 +268,43 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ message: result.error.issues[0].message });
     }
 
-    // 4. Update data object (Merge existing images if not updated)
+    // 4. Update data object (merge retained + new desktop images)
     const updateData = { ...result.data };
+    const MAX_DESKTOP_IMAGES = 5;
 
-    if (updateData.images) {
+    let retainedDesktop = product.images.desktop || [];
+    if (req.body.retainedDesktopImages) {
+      try {
+        const parsed = JSON.parse(req.body.retainedDesktopImages);
+        if (Array.isArray(parsed)) {
+          retainedDesktop = parsed.filter((url) =>
+            product.images.desktop.includes(url),
+          );
+        }
+      } catch {
+        // ignore invalid JSON
+      }
+    }
+
+    const finalDesktop = [...retainedDesktop, ...newImages.desktop].slice(
+      0,
+      MAX_DESKTOP_IMAGES,
+    );
+
+    if (req.body.retainedDesktopImages || newImages.desktop.length > 0) {
+      if (finalDesktop.length === 0) {
+        const uploadedPaths = getUploadedFilesPaths(req.files);
+        await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+        return res.status(400).json({
+          message: "Please provide at least one product image.",
+        });
+      }
+
+      updateData.images = {
+        desktop: finalDesktop,
+        mobile: updateData.images?.mobile || product.images.mobile,
+      };
+    } else if (updateData.images) {
       updateData.images = {
         desktop: updateData.images.desktop || product.images.desktop,
         mobile: updateData.images.mobile || product.images.mobile,
@@ -302,11 +335,16 @@ export const updateProduct = async (req, res) => {
       .populate("categoryId", "name image")
       .lean();
 
-    // 6. Nayi images aane par purani images delete karein
-    if (newImages.desktop.length > 0)
-      await Promise.all(product.images.desktop.map(deleteImageFile));
-    if (newImages.mobile.length > 0)
+    // 6. Jo images product se hata gayi, unki files delete karein
+    if (updateData.images?.desktop) {
+      const removedDesktop = product.images.desktop.filter(
+        (img) => !updateData.images.desktop.includes(img),
+      );
+      await Promise.all(removedDesktop.map(deleteImageFile));
+    }
+    if (newImages.mobile.length > 0) {
       await Promise.all(product.images.mobile.map(deleteImageFile));
+    }
 
     return res.status(200).json({
       message: "Product updated successfully",

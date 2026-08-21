@@ -35,6 +35,13 @@ export const productValidationSchema = z.object({
 
   brand: z.string().trim().optional().default(""),
 
+  subCategory: z
+    .enum(["Men", "Women", "Unisex"], {
+      errorMap: () => ({ message: "Sub-category must be Men, Women, or Unisex" }),
+    })
+    .optional()
+    .default("Unisex"),
+
   // 🔥 IMAGE SCHEMA UPDATED HERE 🔥
   images: z.object({
     desktop: z
