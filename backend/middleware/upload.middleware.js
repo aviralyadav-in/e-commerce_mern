@@ -14,6 +14,7 @@ const foldersToCreate = [
   path.join(uploadDir, "categories"),
   path.join(uploadDir, "products"),
   path.join(uploadDir, "banners"), // 🔥 Banner folder added
+  path.join(uploadDir, "avatars"), // 🆕 User profile photos
 ];
 
 foldersToCreate.forEach((folder) => {
@@ -62,3 +63,32 @@ const createUpload = (subFolder) => {
 export const categoryUpload = createUpload("categories");
 export const productUpload = createUpload("products");
 export const bannerUpload = createUpload("banners"); // 🔥 Banner export added
+export const avatarUpload = createUpload("avatars"); // 🆕 User profile photos
+
+/* =========================================================
+   🆕 CSV BULK UPLOAD (memory storage — file disk par nahi jaati,
+      buffer ko direct controllers parse karte hain)
+========================================================= */
+const ALLOWED_CSV_MIMES = [
+  "text/csv",
+  "application/csv",
+  "application/vnd.ms-excel",
+  "text/plain",
+];
+
+const csvFileFilter = (req, file, cb) => {
+  const isCsvExtension = path.extname(file.originalname).toLowerCase() === ".csv";
+  if (isCsvExtension && ALLOWED_CSV_MIMES.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only .csv files are allowed"), false);
+  }
+};
+
+export const csvUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: csvFileFilter,
+  limits: {
+    fileSize: 2 * 1024 * 1024, // 2MB — bulk CSV ke liye kaafi
+  },
+});

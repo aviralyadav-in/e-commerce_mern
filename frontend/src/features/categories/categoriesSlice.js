@@ -62,6 +62,23 @@ export const deleteCategory = createAsyncThunk(
   },
 );
 
+// 🆕 Bulk Import Categories via CSV
+export const bulkCreateCategories = createAsyncThunk(
+  "categories/bulkCreate",
+  async (formData, { rejectWithValue }) => {
+    try {
+      const response = await API.post("/categories/admin/bulk", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Bulk import failed",
+      );
+    }
+  },
+);
+
 const categoriesSlice = createSlice({
   name: "categories",
   initialState: {
@@ -143,6 +160,11 @@ const categoriesSlice = createSlice({
       .addCase(deleteCategory.rejected, (state, action) => {
         state.deleteLoading = false;
         state.error = action.payload;
+      })
+
+      // 🆕 Bulk Import — nayi categories list me merge kar do
+      .addCase(bulkCreateCategories.fulfilled, (state, action) => {
+        state.categories.unshift(...(action.payload.categories || []));
       });
   },
 });

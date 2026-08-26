@@ -48,10 +48,10 @@ export const createOrder = async (req, res) => {
       result.data;
     const userId = req.user._id;
 
-    // 1. Verify Shipping Address
+    // 1. Verify Shipping Address (naya schema: 'user' field par ownership check)
     const address = await Address.findOne({
       _id: shippingAddress,
-      customer: userId,
+      user: userId,
     });
     if (!address) {
       return res.status(404).json({
@@ -185,7 +185,10 @@ export const myOrders = async (req, res) => {
   try {
     const orders = await Order.find({ user: req.user._id })
       .populate("orderItems.product", "name images price") // Product details
-      .populate("shippingAddress", "full_name street city state pincode")
+      .populate(
+        "shippingAddress",
+        "firstName lastName phone addressLine1 addressLine2 landmark city state zipCode",
+      )
       .sort({ createdAt: -1 });
 
     return res.status(200).json({

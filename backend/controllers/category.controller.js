@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { categoryValidationSchema } from "../validators/categoryValidate.js";
 import { Category } from "../models/category.model.js";
 import { Product } from "../models/product.model.js";
+import { csvToObjects, slugify, toBool } from "../utils/csvParser.js";
 
 const deleteImageFile = async (imagePath) => {
   if (!imagePath) return;
@@ -344,5 +345,120 @@ export const getCategoryProducts = async (req, res) => {
   } catch (error) {
     console.error("Get Category Products Error:", error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+/* =========================================================
+   🆕 BULK CREATE CATEGORIES (CSV Upload)
+   -------------------------------------------------------
+   Columns: name* | description | subCategories ("Men,Women") | isActive
+   - Slug naam se auto-generate hota hai
+   - Duplicates (DB ya file ke andar) skip hote hain
+   - insertMany ordered:false — invalid rows baaki ko block nahi karte
+========================================================= */
+export const bulkCreateCategories = async (req, res) => {
+  try {
+    if (!req.file?.buffer) {
+      return res
+        .status(400)
+        .json({ message: "CSV file is required (form field: 'file')" });
+    }
+
+    const MAX_ROWS = 500;
+    const rows = csvToObjects(req.file.buffer.toString("utf8"));
+
+    if (!rows.length) {
+      return res
+        .status(400)
+        .json({ message: "CSV is empty or has no data rows" });
+    }
+    if (!("name" in rows[0])) {
+      return res.status(400).json({
+        message:
+          "Invalid CSV format — header row must include 'name' (optional: description, subCategories, isActive)",
+      });
+    }
+    if (rows.length > MAX_ROWS) {
+      return res
+        .status(400)
+        .json({ message: `Too many rows — maximum ${MAX_ROWS} per file` });
+    }
+
+    // Ek hi query me saare existing names/slugs — fast dedupe
+    const existing = await Category.find({}).select("name slug").lean();
+    const existingNames = new Set(existing.map((c) => c.name.toLowerCase()));
+    const existingSlugs = new Set(existing.map((c) => c.slug));
+    const seenNames = new Set();
+    const seenSlugs = new Set();
+
+    const docs = [];
+    const invalidRows = [];
+    const duplicates = [];
+    let skipped = 0;
+
+    rows.forEach((row, index) => {
+      const rowNo = index + 2; // +2 → header ke baad 1-based row number
+      const name = (row.name || "").trim();
+
+      const fail = (error, duplicate = false) =>
+        (duplicate ? duplicates : invalidRows).push({
+          row: rowNo,
+          name,
+          error,
+        });
+
+      if (!name) return fail("'name' is required");
+
+      const lowerName = name.toLowerCase();
+      if (existingNames.has(lowerName) || seenNames.has(lowerName)) {
+        skipped += 1;
+        return fail("Category name already exists", true);
+      }
+
+      const slug = slugify(name);
+      if (!slug) return fail("Name se valid slug generate nahi ho paya");
+
+      if (existingSlugs.has(slug) || seenSlugs.has(slug)) {
+        skipped += 1;
+        return fail(`Slug '${slug}' already exists`, true);
+      }
+
+      const subCategories = (row.subcategories || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s === "Men" || s === "Women");
+
+      seenNames.add(lowerName);
+      seenSlugs.add(slug);
+      docs.push({
+        name,
+        slug,
+        description: (row.description || "").slice(0, 500),
+        subCategories: subCategories.length
+          ? [...new Set(subCategories)]
+          : ["Men", "Women"],
+        isActive: toBool(row.isactive, true),
+        image: "", // Image baad me normal Edit se upload ho sakti hai
+      });
+    });
+
+    let inserted = [];
+    if (docs.length) {
+      inserted = await Category.insertMany(docs, { ordered: false });
+    }
+
+    return res.status(200).json({
+      message: `Bulk upload complete — ${inserted.length} created, ${duplicates.length} duplicates skipped, ${invalidRows.length} invalid rows`,
+      totalRows: rows.length,
+      insertedCount: inserted.length,
+      skippedDuplicates: duplicates.length,
+      invalidRowCount: invalidRows.length,
+      invalidRows,
+      duplicates,
+      categories: inserted,
+    });
+  } catch (error) {
+    console.error("Bulk Create Categories Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };

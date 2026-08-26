@@ -5,10 +5,11 @@ import { createOrder } from "../features/orders/ordersSlice";
 import { clearCart } from "../features/cart/cartSlice";
 import {
   fetchAddresses,
-  addAddress,
 } from "../features/addresses/addressesSlice";
 import { pushToast } from "../features/ui/uiSlice";
 import CheckoutSummary from "../components/cart/CheckoutSummary";
+import AddressForm from "../components/account/AddressForm";
+import { ADDRESS_TYPE_LABELS } from "../utils/address";
 import {
   MapPinIcon,
   PhoneIcon,
@@ -39,15 +40,6 @@ const PAYMENT_METHODS = [
   },
 ];
 
-const EMPTY_FORM = {
-  full_name: "",
-  phone: "",
-  street: "",
-  city: "",
-  state: "",
-  pincode: "",
-};
-
 /** Section heading — gold icon circle + eyebrow + serif title */
 function SectionHead({ icon: Icon, eyebrow, title }) {
   return (
@@ -76,20 +68,10 @@ export default function CheckoutPage() {
   const { addresses, loading: addrLoading } = useSelector(
     (s) => s.addresses,
   );
-  // Receiver (delivery) details profile se pre-fill karne ke liye
-  const user = useSelector((s) => s.auth.user);
-
   // User dwara manually pick kiya gaya address (null = auto-select default)
   const [pickedId, setPickedId] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState("COD");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    ...EMPTY_FORM,
-    full_name: user?.name || "",
-    phone: user?.phone || "",
-  });
-  const [errors, setErrors] = useState({});
-  const [savingAddr, setSavingAddr] = useState(false);
 
   useEffect(() => {
     dispatch(fetchAddresses());
@@ -99,62 +81,12 @@ export default function CheckoutPage() {
   // hain (react-hooks/set-state-in-effect fix). Jab tak user ne khud address pick
   // nahi kiya, default (ya pehla) saved address active rahega.
   const defaultAddressId = addresses.length
-    ? (addresses.find((a) => a.is_default) || addresses[0])._id
+    ? (addresses.find((a) => a.isDefault) || addresses[0])._id
     : null;
   const selectedAddress = pickedId ?? defaultAddressId;
 
   // Addresses na hon (aur load complete ho) toh form khula rakho
   const formVisible = showForm || (!addrLoading && addresses.length === 0);
-
-  const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
-
-  const validateForm = () => {
-    const errs = {};
-    if (form.full_name.trim().length < 2)
-      errs.full_name = "Receiver name required";
-    if (!/^[0-9]{10}$/.test(form.phone))
-      errs.phone = "Valid 10-digit phone required";
-    if (form.street.trim().length < 3)
-      errs.street = "Street / House No. required";
-    if (!form.city.trim()) errs.city = "City required";
-    if (!form.state.trim()) errs.state = "State required";
-    if (!/^[0-9]{6}$/.test(form.pincode))
-      errs.pincode = "Valid 6-digit pincode required";
-    return errs;
-  };
-
-  const handleSaveAddress = async (e) => {
-    e.preventDefault();
-    const errs = validateForm();
-    setErrors(errs);
-    if (Object.keys(errs).length) return;
-
-    setSavingAddr(true);
-    const result = await dispatch(addAddress(form));
-    setSavingAddr(false);
-    if (addAddress.fulfilled.match(result)) {
-      dispatch(pushToast("Address saved"));
-      setPickedId(result.payload._id);
-      setForm({
-        ...EMPTY_FORM,
-        full_name: user?.name || "",
-        phone: user?.phone || "",
-      });
-      setErrors({});
-      setShowForm(false);
-    } else {
-      dispatch(
-        pushToast(result.payload || "Could not save address", "error"),
-      );
-    }
-  };
-
-  const err = (key) =>
-    errors[key] ? (
-      <p className="mt-1 text-xs" style={{ color: "var(--danger)" }}>
-        {errors[key]}
-      </p>
-    ) : null;
 
   // Empty cart guard
   if (!cart?.items?.length) {
@@ -238,8 +170,19 @@ export default function CheckoutPage() {
                     >
                       <div className="min-w-0">
                         <p className="font-semibold">
-                          {addr.full_name}
-                          {addr.is_default && (
+                          {addr.fullName ||
+                            `${addr.firstName} ${addr.lastName}`}
+                          {(addr.addressNickname ||
+                            ADDRESS_TYPE_LABELS[addr.addressType]) && (
+                            <span
+                              className="eyebrow ml-2 align-middle"
+                              style={{ fontSize: 9 }}
+                            >
+                              {addr.addressNickname ||
+                                ADDRESS_TYPE_LABELS[addr.addressType]}
+                            </span>
+                          )}
+                          {addr.isDefault && (
                             <span
                               className="eyebrow ml-2 align-middle"
                               style={{ fontSize: 9 }}
@@ -258,8 +201,10 @@ export default function CheckoutPage() {
                           className="mt-1 text-sm leading-relaxed"
                           style={{ color: "var(--ink-soft)" }}
                         >
-                          {addr.street}, {addr.city}, {addr.state} —{" "}
-                          {addr.pincode}
+                          {[addr.addressLine1, addr.addressLine2, addr.landmark]
+                            .filter(Boolean)
+                            .join(", ")}
+                          , {addr.city}, {addr.state} — {addr.zipCode}
                         </p>
                       </div>
                       <span
@@ -296,11 +241,9 @@ export default function CheckoutPage() {
               </button>
             )}
 
-            {/* Add-new form */}
+            {/* Add-new form — shared AddressForm (add/edit dono handle karta hai) */}
             {formVisible && (
-              <form
-                onSubmit={handleSaveAddress}
-                className="space-y-4"
+              <div
                 style={{
                   borderTop: addresses.length
                     ? "1px solid var(--border)"
@@ -316,99 +259,17 @@ export default function CheckoutPage() {
                     New Address
                   </p>
                 )}
-                <p className="text-xs" style={{ color: "var(--ink-muted)" }}>
-                  Receiver's name &amp; phone for delivery — pre-filled from
-                  your profile.
-                </p>
-                <div>
-                  <label className="field-label">Full Name *</label>
-                  <input
-                    className="field"
-                    placeholder="Enter your full name"
-                    value={form.full_name}
-                    onChange={set("full_name")}
-                  />
-                  {err("full_name")}
-                </div>
-                <div>
-                  <label className="field-label">
-                    Street Address / House No. *
-                  </label>
-                  <textarea
-                    rows={2}
-                    className="field resize-none"
-                    placeholder="House no., street, area"
-                    value={form.street}
-                    onChange={set("street")}
-                  />
-                  {err("street")}
-                </div>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <div>
-                    <label className="field-label">City *</label>
-                    <input
-                      className="field"
-                      placeholder="Enter city"
-                      value={form.city}
-                      onChange={set("city")}
-                    />
-                    {err("city")}
-                  </div>
-                  <div>
-                    <label className="field-label">State *</label>
-                    <input
-                      className="field"
-                      placeholder="Enter state"
-                      value={form.state}
-                      onChange={set("state")}
-                    />
-                    {err("state")}
-                  </div>
-                  <div>
-                    <label className="field-label">PIN Code *</label>
-                    <input
-                      className="field"
-                      maxLength={6}
-                      placeholder="Enter PIN code"
-                      value={form.pincode}
-                      onChange={set("pincode")}
-                    />
-                    {err("pincode")}
-                  </div>
-                </div>
-                <div>
-                  <label className="field-label">Mobile Number *</label>
-                  <input
-                    className="field"
-                    maxLength={10}
-                    placeholder="Enter 10-digit mobile number"
-                    value={form.phone}
-                    onChange={set("phone")}
-                  />
-                  {err("phone")}
-                </div>
-                <div className="flex flex-wrap gap-3 pt-1">
-                  <button
-                    type="submit"
-                    className="btn btn-accent"
-                    disabled={savingAddr}
-                  >
-                    {savingAddr ? "Saving…" : "Save & Use This Address"}
-                  </button>
-                  {addresses.length > 0 && (
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      onClick={() => {
-                        setShowForm(false);
-                        setErrors({});
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </div>
-              </form>
+                <AddressForm
+                  embedded
+                  onSaved={(addr) => {
+                    setPickedId(addr._id);
+                    setShowForm(false);
+                  }}
+                  onCancel={
+                    addresses.length > 0 ? () => setShowForm(false) : undefined
+                  }
+                />
+              </div>
             )}
           </section>
 

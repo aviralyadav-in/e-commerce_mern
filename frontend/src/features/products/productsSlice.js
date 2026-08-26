@@ -88,6 +88,23 @@ export const deleteProduct = createAsyncThunk(
   },
 );
 
+// 🆕 Bulk Import Products via CSV (dropdown-category method)
+export const bulkCreateProducts = createAsyncThunk(
+  "products/bulkCreate",
+  async ({ formData }, { rejectWithValue }) => {
+    try {
+      const response = await API.post("/products/admin/bulk", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Bulk import failed",
+      );
+    }
+  },
+);
+
 const productsSlice = createSlice({
   name: "products",
   initialState: {

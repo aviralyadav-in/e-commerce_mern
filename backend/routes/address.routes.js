@@ -4,6 +4,7 @@ import {
   getUserAddresses,
   getAddressById,
   updateAddress,
+  setDefaultAddress,
   deleteAddress,
 } from "../controllers/address.controller.js";
 
@@ -18,6 +19,7 @@ addressRouter.use(protectedRoute);
 // Address Routes
 addressRouter.post("/", createAddress);
 addressRouter.get("/", getUserAddresses);
+addressRouter.patch("/:id/default", setDefaultAddress); // One-tap default switch
 addressRouter.get("/:id", getAddressById);
 addressRouter.put("/:id", updateAddress);
 addressRouter.delete("/:id", deleteAddress);

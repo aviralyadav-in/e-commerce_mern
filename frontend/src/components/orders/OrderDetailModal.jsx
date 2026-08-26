@@ -251,14 +251,20 @@ const OrderDetailModal = ({ isOpen, orderId, onClose }) => {
                 {address ? (
                   <div className="admin-card p-3.5 space-y-1">
                     <p className="text-[13px] font-semibold text-(--ink)">
-                      {address.full_name || "—"}
+                      {address.fullName ||
+                        [address.firstName, address.lastName]
+                          .filter(Boolean)
+                          .join(" ") ||
+                        "—"}
                     </p>
                     <p className="text-[12.5px] text-(--ink-soft) leading-relaxed">
                       {[
-                        address.street,
+                        address.addressLine1,
+                        address.addressLine2,
+                        address.landmark,
                         address.city,
                         address.state,
-                        address.pincode,
+                        address.zipCode,
                       ]
                         .filter(Boolean)
                         .join(", ") || "—"}

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { deleteUser } from "../../features/users/usersSlice";
 import useTableControls from "../../hooks/useTableControls";
@@ -7,6 +7,7 @@ import EmptyState from "../common/EmptyState";
 import Pagination from "../common/Pagination";
 import SortableTh from "../common/SortableTh";
 import { formatDate, initials } from "../../utils/format";
+import { getAssetUrl } from "../../utils/assetUrl";
 import { PencilIcon, PlusIcon, TrashIcon, UsersIcon } from "../common/Icon";
 
 const GENDER_LABEL = {
@@ -79,8 +80,16 @@ const UserTable = ({ users, onEdit, onCreate }) => {
                   <tr key={user._id}>
                     <td>
                       <div className="flex items-center gap-2.5">
-                        <div className="avatar w-8 h-8">
-                          {initials(user.name)}
+                        <div className="avatar w-8 h-8 overflow-hidden">
+                          {user.avatar ? (
+                            <img
+                              src={getAssetUrl(user.avatar)}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            initials(user.name)
+                          )}
                         </div>
                         <div className="min-w-0">
                           <p className="cell-strong truncate max-w-45">

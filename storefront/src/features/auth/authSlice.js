@@ -58,6 +58,37 @@ export const updateProfile = createAsyncThunk(
   },
 );
 
+// 🆕 Profile photo upload / remove
+export const uploadAvatar = createAsyncThunk(
+  "auth/uploadAvatar",
+  async (formData, { rejectWithValue }) => {
+    try {
+      const response = await API.put("/auth/profile/avatar", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data.user;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Avatar upload failed",
+      );
+    }
+  },
+);
+
+export const removeAvatar = createAsyncThunk(
+  "auth/removeAvatar",
+  async (_, { rejectWithValue }) => {
+    try {
+      const response = await API.delete("/auth/profile/avatar");
+      return response.data.user;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Could not remove photo",
+      );
+    }
+  },
+);
+
 export const logoutUser = createAsyncThunk("auth/logout", async () => {
   try {
     await API.post("/auth/logout");

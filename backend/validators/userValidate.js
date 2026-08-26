@@ -43,7 +43,11 @@ export const userValidationSchema = z.object({
     })
     .default("male"),
 
-  dateOfBirth: z.coerce.date().nullable().optional().default(null),
+  // 🛠️ "" aaye to Invalid Date na aaye — null treat karo
+  dateOfBirth: z
+    .preprocess((v) => (v === "" ? null : v), z.coerce.date().nullable())
+    .optional()
+    .default(null),
 });
 
 export const loginSchema = z.object({
@@ -85,7 +89,9 @@ export const updateProfileSchema = z.object({
 
   gender: z.enum(["male", "female"]).optional(),
 
-  dateOfBirth: z.coerce.date().nullable().optional(),
+  dateOfBirth: z
+    .preprocess((v) => (v === "" ? null : v), z.coerce.date().nullable())
+    .optional(),
 });
 
 // Admin panel se user update — password optional
@@ -125,5 +131,7 @@ export const adminUpdateUserSchema = z.object({
 
   gender: z.enum(["male", "female"]).optional(),
 
-  dateOfBirth: z.coerce.date().nullable().optional(),
+  dateOfBirth: z
+    .preprocess((v) => (v === "" ? null : v), z.coerce.date().nullable())
+    .optional(),
 });

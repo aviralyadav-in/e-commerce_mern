@@ -1,7 +1,8 @@
 import express from "express";
-import { categoryUpload } from "../middleware/upload.middleware.js";
+import { categoryUpload, csvUpload } from "../middleware/upload.middleware.js";
 
 import {
+  bulkCreateCategories,
   createCategory,
   deleteCategory,
   getCategories,
@@ -18,6 +19,14 @@ const categoryRouter = express.Router();
 categoryRouter.get("/", getCategories);
 categoryRouter.get("/:id", getCategoryById);
 categoryRouter.get("/:id/products", getCategoryProducts);
+
+// 🆕 Bulk import via CSV (pehle rakha hai taaki /admin/:id se na takrao)
+categoryRouter.post(
+  "/admin/bulk",
+  adminRoute,
+  csvUpload.single("file"),
+  bulkCreateCategories,
+);
 
 categoryRouter.post(
   "/admin",

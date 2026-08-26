@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   addUser,
   updateUser,
   clearUserError,
+  uploadUserAvatar,
+  removeUserAvatar,
 } from "../../features/users/usersSlice";
 import Drawer from "../common/Drawer";
 import { Field, FormAlert } from "../common/Field";
 import { initials } from "../../utils/format";
-import { UserIcon } from "../common/Icon";
+import { getAssetUrl } from "../../utils/assetUrl";
+import { UserIcon, UploadIcon } from "../common/Icon";
 
 const GENDER_OPTIONS = [
   { value: "male", label: "Male" },
@@ -28,7 +31,18 @@ const UserModal = ({ isOpen, onClose, editData }) => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  useEffect(() => {
+  // 🆕 Avatar (sirf edit mode me — naye user ki pehle create honi zaroori hai)
+  const avatarInputRef = useRef(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+
+  // 🛠️ editData/isOpen change par form reset — React ka recommended
+  // "adjust state during render" pattern (purane effect-setState ki jagah)
+  const formKey = `${isOpen}-${editData?._id || "new"}`;
+  const [prevFormKey, setPrevFormKey] = useState(formKey);
+  if (prevFormKey !== formKey) {
+    setPrevFormKey(formKey);
     if (editData) {
       setName(editData.name || "");
       setEmail(editData.email || "");
@@ -40,6 +54,7 @@ const UserModal = ({ isOpen, onClose, editData }) => {
           ? new Date(editData.dateOfBirth).toISOString().split("T")[0]
           : "",
       );
+      setAvatarPreview(editData.avatar || "");
     } else {
       setName("");
       setEmail("");
@@ -47,11 +62,56 @@ const UserModal = ({ isOpen, onClose, editData }) => {
       setPhone("");
       setGender("male");
       setDateOfBirth("");
+      setAvatarPreview("");
     }
     setErrors({});
     setTouched({});
-    dispatch(clearUserError());
-  }, [editData, isOpen, dispatch]);
+  }
+
+  // Redux error clear karna external-system update hai — effect allowed hai
+  useEffect(() => {
+    if (isOpen) dispatch(clearUserError());
+  }, [dispatch, formKey, isOpen]);
+
+  // 🆕 Avatar handlers — select hote hi turant upload
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !editData?._id) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setAvatarError("Only JPG, PNG or WEBP allowed.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError("Photo must be under 5MB.");
+      return;
+    }
+    setAvatarError("");
+    setUploadingAvatar(true);
+    const fd = new FormData();
+    fd.append("avatar", file);
+    const res = await dispatch(
+      uploadUserAvatar({ id: editData._id, formData: fd }),
+    );
+    setUploadingAvatar(false);
+    if (uploadUserAvatar.fulfilled.match(res)) {
+      setAvatarPreview(res.payload?.avatar || "");
+    } else {
+      setAvatarError(res.payload || "Upload failed.");
+    }
+  };
+
+  const handleAvatarRemove = async () => {
+    if (!editData?._id) return;
+    setUploadingAvatar(true);
+    const res = await dispatch(removeUserAvatar(editData._id));
+    setUploadingAvatar(false);
+    if (removeUserAvatar.fulfilled.match(res)) {
+      setAvatarPreview("");
+    } else {
+      setAvatarError(res.payload || "Could not remove photo.");
+    }
+  };
 
   const validate = (fields = {}) => {
     const errs = {};
@@ -167,17 +227,62 @@ const UserModal = ({ isOpen, onClose, editData }) => {
 
       {/* Identity strip — makes it obvious which account you're editing. */}
       <div className="flex items-center gap-3 mb-4 pb-4 border-b border-(--border)">
-        <span className="avatar w-11 h-11 text-[14px]">
-          {initials(name) || "?"}
-        </span>
-        <div className="min-w-0">
+        {uploadingAvatar ? (
+          <span className="avatar w-11 h-11 flex items-center justify-center">
+            <span className="spinner spinner-sm" />
+          </span>
+        ) : avatarPreview ? (
+          <img
+            src={getAssetUrl(avatarPreview)}
+            alt=""
+            className="w-11 h-11 rounded-full object-cover border border-(--border)"
+          />
+        ) : (
+          <span className="avatar w-11 h-11 text-[14px]">
+            {initials(name) || "?"}
+          </span>
+        )}
+        <div className="min-w-0 flex-1">
           <p className="text-[13.5px] font-semibold text-(--ink) truncate">
             {name.trim() || "Unnamed customer"}
           </p>
           <p className="text-[11.5px] text-(--ink-muted) truncate">
             {email.trim() || "No email yet"}
           </p>
+          {avatarError && (
+            <p className="mt-1 text-[11px] text-red-600">{avatarError}</p>
+          )}
         </div>
+        {editData && (
+          <div className="shrink-0 flex flex-col items-end gap-1.5">
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.webp"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+            >
+              <UploadIcon className="w-3.5 h-3.5" />
+              {avatarPreview ? "Change photo" : "Add photo"}
+            </button>
+            {avatarPreview && (
+              <button
+                type="button"
+                className="text-[11px] font-semibold underline text-red-600"
+                onClick={handleAvatarRemove}
+                disabled={uploadingAvatar}
+              >
+                Remove photo
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <form

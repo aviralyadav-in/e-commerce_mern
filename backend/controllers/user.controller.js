@@ -1,4 +1,6 @@
 import bcryptjs from "bcryptjs";
+import fs from "fs/promises";
+import path from "path";
 import mongoose from "mongoose";
 import { User } from "../models/user.model.js";
 import { Cart } from "../models/cart.model.js";
@@ -187,6 +189,93 @@ export const deleteUser = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete User Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* ==========================================
+   🆕 LOCAL FILE CLEANUP HELPER (avatar)
+========================================== */
+const deleteLocalFile = async (imagePath) => {
+  if (!imagePath || imagePath.startsWith("http")) return;
+  try {
+    await fs.unlink(path.join(process.cwd(), imagePath.replace(/^\/+/, "")));
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("Delete Avatar File Error:", error);
+    }
+  }
+};
+
+/* ==========================================
+   🆕 UPDATE USER AVATAR (Admin)
+   multipart/form-data → field: 'avatar'
+========================================== */
+export const updateUserAvatar = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ message: "Avatar image is required (form field: 'avatar')" });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await deleteLocalFile(user.avatar);
+    user.avatar = `/uploads/avatars/${req.file.filename}`;
+    await user.save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    return res.status(200).json({
+      message: "Avatar updated successfully",
+      user: userObj,
+    });
+  } catch (error) {
+    console.error("Update User Avatar Error:", error);
+    if (req.file) {
+      await deleteLocalFile(`/uploads/avatars/${req.file.filename}`);
+    }
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* ==========================================
+   🆕 REMOVE USER AVATAR (Admin)
+========================================== */
+export const removeUserAvatar = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid user ID" });
+    }
+
+    const user = await User.findById(id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await deleteLocalFile(user.avatar);
+    user.avatar = "";
+    await user.save();
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    return res.status(200).json({
+      message: "Avatar removed successfully",
+      user: userObj,
+    });
+  } catch (error) {
+    console.error("Remove User Avatar Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

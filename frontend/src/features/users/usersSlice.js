@@ -57,6 +57,37 @@ export const deleteUser = createAsyncThunk(
   },
 );
 
+// 🆕 Customer avatar upload / remove (Users drawer se)
+export const uploadUserAvatar = createAsyncThunk(
+  "users/uploadAvatar",
+  async ({ id, formData }, { rejectWithValue }) => {
+    try {
+      const response = await API.put(`/users/admin/${id}/avatar`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data.user;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Avatar upload failed",
+      );
+    }
+  },
+);
+
+export const removeUserAvatar = createAsyncThunk(
+  "users/removeAvatar",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await API.delete(`/users/admin/${id}/avatar`);
+      return response.data.user;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Could not remove photo",
+      );
+    }
+  },
+);
+
 const usersSlice = createSlice({
   name: "users",
   initialState: {
@@ -126,6 +157,20 @@ const usersSlice = createSlice({
       .addCase(deleteUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+      })
+
+      // 🆕 Avatar thunks — list me updated user replace karo
+      .addCase(uploadUserAvatar.fulfilled, (state, action) => {
+        const index = state.users.findIndex(
+          (u) => u._id === action.payload._id,
+        );
+        if (index !== -1) state.users[index] = action.payload;
+      })
+      .addCase(removeUserAvatar.fulfilled, (state, action) => {
+        const index = state.users.findIndex(
+          (u) => u._id === action.payload._id,
+        );
+        if (index !== -1) state.users[index] = action.payload;
       });
   },
 });

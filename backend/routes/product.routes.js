@@ -1,6 +1,7 @@
 import express from "express";
 
 import {
+  bulkCreateProducts,
   createProduct,
   deleteProduct,
   getProductById,
@@ -10,12 +11,20 @@ import {
 
 import { protectedRoute } from "../middleware/auth.middleware.js";
 import { adminRoute } from "../middleware/admin.middleware.js";
-import { productUpload } from "../middleware/upload.middleware.js";
+import { productUpload, csvUpload } from "../middleware/upload.middleware.js";
 
 const productRouter = express.Router();
 
 productRouter.get("/", getProducts);
 productRouter.get("/:id", getProductById);
+
+// 🆕 Bulk import via CSV (dropdown-category method — body me categoryId)
+productRouter.post(
+  "/admin/bulk",
+  adminRoute,
+  csvUpload.single("file"),
+  bulkCreateProducts,
+);
 
 productRouter.post(
   "/admin",

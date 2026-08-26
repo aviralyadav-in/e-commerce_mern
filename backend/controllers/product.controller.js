@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 import { productValidationSchema } from "../validators/productValidate.js";
 import { Category } from "../models/category.model.js";
 import { Product } from "../models/product.model.js";
+import { csvToObjects, slugify, toBool } from "../utils/csvParser.js";
 
 /* =========================================================
    HELPER FUNCTIONS
@@ -447,5 +448,225 @@ export const deleteProduct = async (req, res) => {
   } catch (error) {
     console.error("Delete Product Error:", error);
     return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+/* =========================================================
+   🆕 BULK CREATE PRODUCTS (CSV Upload)
+   -------------------------------------------------------
+   PRIMARY: Category Dropdown Method — req.body.categoryId har
+   row ka default category hai (admin UI se select hota hai).
+   FALLBACK: Optional 'category_name' column — agar diya gaya aur
+   DB se match hua to us row par dropdown override ho jayega
+   (ek hi file me mixed categories bhi upload ho sakti hain).
+
+   Required columns : name, description, price, stock, images
+   Optional columns : brand, subCategory, discountPrice, sku,
+                      mobileImages, category_name, isActive,
+                      isFeatured, isBestSeller, isNewArrival
+
+   - slug naam se auto-generate (+ uniqueness suffix)
+   - SKU missing ho to auto-generate; duplicate SKU rows skip
+   - images column: comma-separated URLs / /uploads/... paths
+========================================================= */
+export const bulkCreateProducts = async (req, res) => {
+  try {
+    if (!req.file?.buffer) {
+      return res
+        .status(400)
+        .json({ message: "CSV file is required (form field: 'file')" });
+    }
+
+    const MAX_ROWS = 300;
+    const { categoryId } = req.body;
+
+    // 1. Dropdown wali category validate karo
+    if (!categoryId || !mongoose.Types.ObjectId.isValid(categoryId)) {
+      return res.status(400).json({ message: "Valid categoryId is required" });
+    }
+    const defaultCategory = await Category.findById(categoryId).lean();
+    if (!defaultCategory) {
+      return res.status(404).json({ message: "Selected category not found" });
+    }
+
+    // 2. CSV parse + header check
+    const rows = csvToObjects(req.file.buffer.toString("utf8"));
+    if (!rows.length) {
+      return res
+        .status(400)
+        .json({ message: "CSV is empty or has no data rows" });
+    }
+
+    const REQUIRED_COLUMNS = ["name", "description", "price", "stock", "images"];
+    const missingColumn = REQUIRED_COLUMNS.find((col) => !(col in rows[0]));
+    if (missingColumn) {
+      return res.status(400).json({
+        message: `Missing required column '${missingColumn}'. Required columns: ${REQUIRED_COLUMNS.join(", ")}`,
+      });
+    }
+    if (rows.length > MAX_ROWS) {
+      return res
+        .status(400)
+        .json({ message: `Too many rows — maximum ${MAX_ROWS} per file` });
+    }
+
+    // 3. category_name fallback ke liye saari categories ki lookup map
+    const allCategories = await Category.find({}).select("name").lean();
+    const categoryByName = new Map(
+      allCategories.map((c) => [c.name.toLowerCase(), c._id]),
+    );
+
+    // 4. Existing slug/sku sets — dedupe fast rahe
+    const existingProducts = await Product.find({}).select("slug sku").lean();
+    const usedSlugs = new Set(existingProducts.map((p) => p.slug));
+    const usedSkus = new Set(existingProducts.map((p) => p.sku));
+
+    const uniqueSlug = (base) => {
+      let candidate = base;
+      let counter = 2;
+      while (usedSlugs.has(candidate)) {
+        candidate = `${base}-${counter}`;
+        counter += 1;
+      }
+      usedSlugs.add(candidate);
+      return candidate;
+    };
+
+    const generateSku = () => {
+      let sku;
+      do {
+        sku = `NB-${Date.now().toString(36).toUpperCase()}-${Math.random()
+          .toString(36)
+          .slice(2, 6)
+          .toUpperCase()}`;
+      } while (usedSkus.has(sku));
+      usedSkus.add(sku);
+      return sku;
+    };
+
+    const docs = [];
+    const invalidRows = [];
+    const duplicates = [];
+    let skipped = 0;
+
+    rows.forEach((row, index) => {
+      const rowNo = index + 2;
+      const name = (row.name || "").trim();
+
+      const fail = (error, duplicate = false) =>
+        (duplicate ? duplicates : invalidRows).push({
+          row: rowNo,
+          name,
+          error,
+        });
+
+      // --- Required fields ---
+      if (!name) return fail("'name' is required");
+
+      const description = (row.description || "").trim();
+      if (description.length < 10)
+        return fail("'description' must be at least 10 characters");
+
+      const price = Number(row.price);
+      if (!Number.isFinite(price) || price < 0)
+        return fail("Valid numeric 'price' is required");
+
+      const stockRaw = String(row.stock ?? "").trim();
+      const stock = stockRaw === "" ? 0 : Number(stockRaw);
+      if (!Number.isFinite(stock) || stock < 0)
+        return fail("'stock' must be 0 or a positive number");
+
+      const desktop = (row.images || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (!desktop.length)
+        return fail(
+          "'images' required — comma-separated image URLs/paths (at least one)",
+        );
+      const mobile = String(row.mobileimages || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      // --- Optional: discount ---
+      let discountPrice = null;
+      const discountRaw = String(row.discountprice ?? "").trim();
+      if (discountRaw !== "") {
+        discountPrice = Number(discountRaw);
+        if (!Number.isFinite(discountPrice) || discountPrice < 0)
+          return fail("'discountPrice' must be a positive number");
+        if (discountPrice >= price)
+          return fail("'discountPrice' must be less than 'price'");
+      }
+
+      // --- Category resolve: dropdown default → category_name override ---
+      let rowCategoryId = defaultCategory._id;
+      const catName = (row.category_name || "").trim();
+      if (catName) {
+        const matched = categoryByName.get(catName.toLowerCase());
+        if (!matched)
+          return fail(`category_name '${catName}' did not match any category`);
+        rowCategoryId = matched;
+      }
+
+      // --- Sub-category ---
+      const subCategory = (row.subcategory || "").trim();
+      if (subCategory && !["Men", "Women", "Unisex"].includes(subCategory))
+        return fail("'subCategory' must be Men, Women or Unisex");
+
+      // --- SKU: diya gaya ho to uniqueness check, warna auto-generate ---
+      let sku = (row.sku || "").trim().toUpperCase();
+      if (sku) {
+        if (usedSkus.has(sku)) {
+          skipped += 1;
+          return fail(`SKU '${sku}' already exists`, true);
+        }
+        usedSkus.add(sku);
+      } else {
+        sku = generateSku();
+      }
+
+      // --- Slug ---
+      const baseSlug = slugify(name);
+      if (!baseSlug) return fail("Name se valid slug generate nahi ho paya");
+
+      docs.push({
+        categoryId: rowCategoryId,
+        name,
+        slug: uniqueSlug(baseSlug),
+        description,
+        brand: (row.brand || "").trim(),
+        subCategory: subCategory || "Unisex",
+        images: { desktop, mobile },
+        price,
+        discountPrice,
+        sku,
+        stock,
+        isActive: toBool(row.isactive, true),
+        isFeatured: toBool(row.isfeatured, false),
+        isBestSeller: toBool(row.isbestseller, false),
+        isNewArrival: toBool(row.isnewarrival, false),
+      });
+    });
+
+    let inserted = [];
+    if (docs.length) {
+      inserted = await Product.insertMany(docs, { ordered: false });
+    }
+
+    return res.status(200).json({
+      message: `Bulk upload complete — ${inserted.length} created, ${duplicates.length} duplicates skipped, ${invalidRows.length} invalid rows`,
+      totalRows: rows.length,
+      insertedCount: inserted.length,
+      skippedDuplicates: duplicates.length,
+      invalidRowCount: invalidRows.length,
+      invalidRows,
+      duplicates,
+      products: inserted,
+    });
+  } catch (error) {
+    console.error("Bulk Create Products Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };

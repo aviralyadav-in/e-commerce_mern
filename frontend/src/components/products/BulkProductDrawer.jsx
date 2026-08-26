@@ -28,7 +28,7 @@ const emptyRow = (categoryId = "") => ({
   discountPrice: "",
   stock: "",
   categoryId,
-  subCategory: "Unisex",
+  subCategory: "Men",
   isFeatured: false,
   isBestSeller: false,
   isNewArrival: false,
@@ -73,9 +73,10 @@ function BulkRow({
   onRemoveImage,
 }) {
   const selectedCategory = categories.find((c) => c._id === row.categoryId);
+  // Sirf Men / Women options (requirement)
   const availableSubCategories = selectedCategory?.subCategories?.length
-    ? [...selectedCategory.subCategories, "Unisex"]
-    : ["Men", "Women", "Unisex"];
+    ? [...new Set(selectedCategory.subCategories)]
+    : ["Men", "Women"];
 
   const err = (f) => errors[f];
   const invalid = (f) => (errors[f] ? "is-invalid" : "");
@@ -184,7 +185,7 @@ function BulkRow({
                 className={`form-select ${invalid("categoryId")}`}
                 value={row.categoryId}
                 onChange={(e) =>
-                  onChange({ categoryId: e.target.value, subCategory: "Unisex" })
+                  onChange({ categoryId: e.target.value, subCategory: "Men" })
                 }
               >
                 <option value="" disabled>

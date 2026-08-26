@@ -96,6 +96,12 @@ export const TrashIcon = (p) => (
   </Svg>
 );
 
+export const PencilIcon = (p) => (
+  <Svg {...p}>
+    <path d="m15.2 5.2 3.6 3.6M4 20l1-4L16.4 4.6a2.1 2.1 0 0 1 3 3L8 19l-4 1Z" />
+  </Svg>
+);
+
 export const StarIcon = ({ filled, ...p }) => (
   <Svg {...p} fill={filled ? "currentColor" : "none"}>
     <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L3.5 9.7l5.9-.9L12 3.5Z" />

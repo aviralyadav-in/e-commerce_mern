@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAddresses } from "../../features/addresses/addressesSlice";
-import AddressForm from "./AddressForm";
+import AddressForm from "../account/AddressForm";
+import { ADDRESS_TYPE_LABELS } from "../../utils/address";
 import { MapPinIcon, PlusIcon, CheckIcon, SpinnerIcon } from "../common/Icons";
 
 /** Saved addresses me se select karne ka UI + add-new form toggle */
@@ -17,7 +18,7 @@ export default function AddressPicker({ selected, onSelect }) {
   // Default address auto-select
   useEffect(() => {
     if (!selected && addresses.length) {
-      const def = addresses.find((a) => a.is_default) || addresses[0];
+      const def = addresses.find((a) => a.isDefault) || addresses[0];
       onSelect(def._id);
     }
   }, [addresses, selected, onSelect]);
@@ -66,7 +67,9 @@ export default function AddressPicker({ selected, onSelect }) {
               onClick={() => onSelect(addr._id)}
             >
               <div className="flex items-start justify-between gap-2">
-                <p className="font-semibold">{addr.full_name}</p>
+                <p className="font-semibold">
+                  {addr.fullName || `${addr.firstName} ${addr.lastName}`}
+                </p>
                 {selected === addr._id && (
                   <CheckIcon size={16} style={{ color: "var(--accent)" }} />
                 )}
@@ -81,9 +84,21 @@ export default function AddressPicker({ selected, onSelect }) {
                 className="mt-1.5 text-sm leading-relaxed"
                 style={{ color: "var(--ink-soft)" }}
               >
-                {addr.street}, {addr.city}, {addr.state} — {addr.pincode}
+                {[addr.addressLine1, addr.addressLine2, addr.landmark]
+                  .filter(Boolean)
+                  .join(", ")}
+                , {addr.city}, {addr.state} — {addr.zipCode}
               </p>
-              {addr.is_default && (
+              {(addr.addressNickname ||
+                ADDRESS_TYPE_LABELS[addr.addressType]) && (
+                <span
+                  className="eyebrow mr-2 mt-2 inline-block"
+                  style={{ fontSize: 10 }}
+                >
+                  {addr.addressNickname || ADDRESS_TYPE_LABELS[addr.addressType]}
+                </span>
+              )}
+              {addr.isDefault && (
                 <span
                   className="eyebrow mt-2 inline-block"
                   style={{ fontSize: 10 }}

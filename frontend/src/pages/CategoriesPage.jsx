@@ -1,17 +1,22 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchCategories } from "../features/categories/categoriesSlice";
+import {
+  bulkCreateCategories,
+  fetchCategories,
+} from "../features/categories/categoriesSlice";
 import { exportAllCategoriesToExcel } from "../utils/exportProductToExcel";
+import { downloadCategoriesSampleCsv } from "../utils/csvTemplates";
 import { toastInfo } from "../features/ui/uiSlice";
 
 import CategoryTable from "../components/categories/CategoryTable";
 import CategoryModal from "../components/categories/CategoryModal";
 import PageHeader from "../components/common/PageHeader";
+import BulkUploadModal from "../components/common/BulkUploadModal";
 import SearchInput from "../components/common/SearchInput";
 import SegmentedFilter from "../components/common/SegmentedFilter";
 import ErrorBanner from "../components/common/ErrorBanner";
 import TableSkeleton from "../components/common/TableSkeleton";
-import { DownloadIcon, PlusIcon } from "../components/common/Icon";
+import { DownloadIcon, PlusIcon, UploadIcon } from "../components/common/Icon";
 
 const CategoriesPage = () => {
   const dispatch = useDispatch();
@@ -20,6 +25,7 @@ const CategoriesPage = () => {
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editData, setEditData] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(null);
@@ -73,6 +79,16 @@ const CategoriesPage = () => {
     exportAllCategoriesToExcel(categories);
   };
 
+  // 🆕 CSV bulk-import — thunk resolve hone par summary object return hota hai
+  const handleBulkUpload = async (formData) => {
+    const result = await dispatch(bulkCreateCategories(formData));
+    if (bulkCreateCategories.fulfilled.match(result)) {
+      // Naye categories slice ke fulfilled case me list me merge ho gaye
+      return result.payload;
+    }
+    throw new Error(result.payload || "Bulk import failed");
+  };
+
   return (
     <div className="page-shell">
       <PageHeader
@@ -97,6 +113,13 @@ const CategoriesPage = () => {
             >
               <DownloadIcon className="w-4 h-4" />
               Export
+            </button>
+            <button
+              onClick={() => setIsBulkOpen(true)}
+              className="btn btn-secondary"
+            >
+              <UploadIcon className="w-4 h-4" />
+              Import CSV
             </button>
             <button onClick={handleOpenAdd} className="btn btn-primary">
               <PlusIcon className="w-4 h-4" />
@@ -155,6 +178,24 @@ const CategoriesPage = () => {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         editData={editData}
+      />
+
+      {/* 🆕 CSV bulk import */}
+      <BulkUploadModal
+        isOpen={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        title="Import categories via CSV"
+        subtitle="Ek hi file me multiple categories — har row ek nayi category."
+        uploadHint={
+          <>
+            Required column: <b>name</b>. Optional: description,
+            subCategories (&quot;Men,Women&quot;), isActive (true/false).
+            Slug naam se auto-generate hota hai; duplicates skip ho jaate
+            hain.
+          </>
+        }
+        onDownloadSample={downloadCategoriesSampleCsv}
+        onSubmit={handleBulkUpload}
       />
     </div>
   );

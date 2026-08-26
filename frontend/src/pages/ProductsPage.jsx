@@ -1,24 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
+  bulkCreateProducts,
   fetchProducts,
   fetchProductsByCategory,
   setSelectedCategory,
 } from "../features/products/productsSlice";
 import { fetchCategories } from "../features/categories/categoriesSlice";
 import { exportAllProductsToExcel } from "../utils/exportProductToExcel";
+import { downloadProductsSampleCsv } from "../utils/csvTemplates";
 import { toastInfo } from "../features/ui/uiSlice";
 
 import PageHeader from "../components/common/PageHeader";
 import ProductTable from "../components/products/ProductTable";
 import ProductModal from "../components/products/ProductModal";
 import BulkProductDrawer from "../components/products/BulkProductDrawer";
+import BulkUploadModal from "../components/common/BulkUploadModal";
 import SearchInput from "../components/common/SearchInput";
 import SegmentedFilter from "../components/common/SegmentedFilter";
 import ErrorBanner from "../components/common/ErrorBanner";
 import TableSkeleton from "../components/common/TableSkeleton";
 import { formatCurrency } from "../utils/format";
-import { DownloadIcon, LayersIcon, PlusIcon } from "../components/common/Icon";
+import {
+  DownloadIcon,
+  LayersIcon,
+  PlusIcon,
+  UploadIcon,
+} from "../components/common/Icon";
 
 const LOW_STOCK = 5;
 
@@ -33,6 +41,10 @@ const ProductsPage = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
+  // 🆕 CSV import — target category + refresh trigger
+  const [isCsvOpen, setIsCsvOpen] = useState(false);
+  const [csvCategoryId, setCsvCategoryId] = useState("");
+  const [csvRefreshKey, setCsvRefreshKey] = useState(0);
   const [editData, setEditData] = useState(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -68,7 +80,7 @@ const ProductsPage = () => {
         }),
       );
     }
-  }, [dispatch, selectedCategoryId, debouncedSearch]);
+  }, [dispatch, selectedCategoryId, debouncedSearch, csvRefreshKey]);
 
   const getCategoryName = (id) => {
     if (typeof id === "object" && id?.name) return id.name;
@@ -116,6 +128,22 @@ const ProductsPage = () => {
     setIsModalOpen(true);
   };
 
+  // 🆕 CSV bulk-import — dropdown category FormData me chipka kar bhejo
+  const handleCsvUpload = async (formData) => {
+    formData.append("categoryId", csvCategoryId);
+    const result = await dispatch(bulkCreateProducts({ formData }));
+    if (bulkCreateProducts.fulfilled.match(result)) {
+      return result.payload;
+    }
+    throw new Error(result.payload || "Bulk import failed");
+  };
+
+  const closeCsvModal = () => {
+    setIsCsvOpen(false);
+    // Fresh list laao (naye products current filter me aa jaayen)
+    setCsvRefreshKey((k) => k + 1);
+  };
+
   return (
     <div className="page-shell">
       <PageHeader
@@ -154,6 +182,13 @@ const ProductsPage = () => {
             >
               <LayersIcon className="w-4 h-4" />
               Bulk add
+            </button>
+            <button
+              onClick={() => setIsCsvOpen(true)}
+              className="btn btn-secondary"
+            >
+              <UploadIcon className="w-4 h-4" />
+              Import CSV
             </button>
             <button onClick={openAdd} className="btn btn-primary">
               <PlusIcon className="w-4 h-4" />
@@ -232,6 +267,47 @@ const ProductsPage = () => {
           onClose={() => setIsBulkOpen(false)}
         />
       )}
+
+      {/* 🆕 CSV bulk import — Category Dropdown Method */}
+      <BulkUploadModal
+        isOpen={isCsvOpen}
+        onClose={closeCsvModal}
+        title="Import products via CSV"
+        subtitle="Category chuno, CSV upload karo — saare products usi me chale jaayenge."
+        uploadHint={
+          <>
+            Required columns: <b>name, description, price, stock, images</b>{" "}
+            (images = comma-separated URLs). Optional: brand, subCategory,
+            discountPrice, sku (khali = auto-generate), category_name
+            (dropdown override), isActive, isFeatured/isBestSeller/
+            isNewArrival. Slug auto-generate hota hai.
+          </>
+        }
+        onDownloadSample={downloadProductsSampleCsv}
+        onSubmit={handleCsvUpload}
+        isSubmitDisabled={!csvCategoryId}
+        submitDisabledReason="Pehle target category select karein"
+        extraFields={
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-(--ink-faint)">
+              Target category *
+            </label>
+            <select
+              value={csvCategoryId}
+              onChange={(e) => setCsvCategoryId(e.target.value)}
+              className="admin-select w-full"
+              aria-label="Target category for bulk import"
+            >
+              <option value="">Select a category…</option>
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        }
+      />
     </div>
   );
 };

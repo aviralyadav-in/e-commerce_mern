@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   addProduct,
@@ -22,7 +22,7 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
   const [stock, setStock] = useState("");
   const [status, setStatus] = useState("In Stock");
   const [categoryId, setCategoryId] = useState("");
-  const [subCategory, setSubCategory] = useState("Unisex");
+  const [subCategory, setSubCategory] = useState("Men");
   const [isFeatured, setIsFeatured] = useState(false);
   const [isBestSeller, setIsBestSeller] = useState(false);
   const [isNewArrival, setIsNewArrival] = useState(false);
@@ -34,9 +34,10 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
   const totalImageCount = existingImages.length + newImages.length;
 
   const selectedCategory = categories.find((c) => c._id === categoryId);
+  // Sirf Men / Women — Uniselect option nahi rahega (requirement ke hisaab se)
   const availableSubCategories = selectedCategory?.subCategories?.length
-    ? [...selectedCategory.subCategories, "Unisex"]
-    : ["Men", "Women", "Unisex"];
+    ? [...new Set(selectedCategory.subCategories)]
+    : ["Men", "Women"];
 
   useEffect(() => {
     if (editData) {
@@ -46,7 +47,12 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
       setStock(editData.stock || "");
       setStatus(editData.isActive !== false ? "In Stock" : "Out of Stock");
       setCategoryId(editData.categoryId?._id || editData.categoryId || "");
-      setSubCategory(editData.subCategory || "Unisex");
+      // Purane products agar 'Unisex' the to bhi ab valid option hi pre-select ho
+      setSubCategory(
+        ["Men", "Women"].includes(editData.subCategory)
+          ? editData.subCategory
+          : "Men",
+      );
       setIsFeatured(!!editData.isFeatured);
       setIsBestSeller(!!editData.isBestSeller);
       setIsNewArrival(!!editData.isNewArrival);
@@ -59,7 +65,7 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
       setStock("");
       setStatus("In Stock");
       setCategoryId(categories.length > 0 ? categories[0]._id : "");
-      setSubCategory("Unisex");
+      setSubCategory("Men");
       setIsFeatured(false);
       setIsBestSeller(false);
       setIsNewArrival(false);
@@ -338,10 +344,10 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
                 setCategoryId(e.target.value);
                 const cat = categories.find((c) => c._id === e.target.value);
                 const allowed = cat?.subCategories?.length
-                  ? [...cat.subCategories, "Unisex"]
-                  : ["Men", "Women", "Unisex"];
+                  ? [...new Set(cat.subCategories)]
+                  : ["Men", "Women"];
                 if (!allowed.includes(subCategory)) {
-                  setSubCategory(allowed[0] || "Unisex");
+                  setSubCategory(allowed[0] || "Men");
                 }
                 revalidate("categoryId", e.target.value);
               }}

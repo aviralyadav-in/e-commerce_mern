@@ -3,7 +3,7 @@ import { Admin } from "../models/admin.model.js";
 
 export const adminRoute = async (req, res, next) => {
   try {
-    const token = req.cookies.token; // Ya aap req.cookies.adminToken use kar sakte hain agar admin ka token alag naam se save karaya hai
+    const token = req.cookies.adminToken; // 🛠️ FIX: alag cookie naam — user 'token' se collision nahi
 
     if (!token) {
       return res.status(401).json({

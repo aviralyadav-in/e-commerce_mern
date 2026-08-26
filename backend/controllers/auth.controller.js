@@ -1,5 +1,7 @@
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
+import fs from "fs/promises";
+import path from "path";
 import { User } from "../models/user.model.js"; // Aapke path ke hisab se
 import {
   loginSchema,
@@ -152,7 +154,9 @@ export const adminLogin = async (req, res) => {
       expiresIn: "7d",
     });
 
-    res.cookie("token", token, {
+    // 🛠️ FIX: Admin ka JWT alag cookie naam ('adminToken') me — warna yahi
+    // cookie storefront ke 'token' ko overwrite karke usse logout kar deti thi
+    res.cookie("adminToken", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
@@ -191,7 +195,8 @@ export const getAdminMe = async (req, res) => {
 // ==========================================
 export const adminLogout = async (req, res) => {
   try {
-    res.clearCookie("token", {
+    // 🛠️ FIX: sirf admin wali cookie clear karo — user ka 'token' safe rahe
+    res.clearCookie("adminToken", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
@@ -304,6 +309,89 @@ export const updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Update Profile Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* ==========================================
+   🆕 LOCAL FILE CLEANUP HELPER (avatar ke liye)
+   External (http) URLs ko skip karta hai
+========================================== */
+const deleteLocalFile = async (imagePath) => {
+  if (!imagePath || imagePath.startsWith("http")) return;
+  try {
+    const filePath = path.join(process.cwd(), imagePath.replace(/^\/+/, ""));
+    await fs.unlink(filePath);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("Delete Avatar File Error:", error);
+    }
+  }
+};
+
+/* ==========================================
+   🆕 UPDATE AVATAR (profile photo upload)
+   multipart/form-data → field: 'avatar'
+   Purani local photo delete karke nayi set hoti hai
+========================================== */
+export const updateAvatar = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        message: "Avatar image is required (form field: 'avatar')",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const newAvatarPath = `/uploads/avatars/${req.file.filename}`;
+
+    // Purani local file hatao (nayi replace hone se pehle)
+    await deleteLocalFile(user.avatar);
+
+    user.avatar = newAvatarPath;
+    await user.save();
+
+    user.password = undefined;
+    return res.status(200).json({
+      message: "Profile photo updated successfully",
+      user,
+    });
+  } catch (error) {
+    console.error("Update Avatar Error:", error);
+    // Upload hui file agar DB save fail ho jaye to clean karo
+    if (req.file) {
+      await deleteLocalFile(`/uploads/avatars/${req.file.filename}`);
+    }
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* ==========================================
+   🆕 REMOVE AVATAR (photo hatana)
+========================================== */
+export const removeAvatar = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await deleteLocalFile(user.avatar);
+
+    user.avatar = "";
+    await user.save();
+
+    user.password = undefined;
+    return res.status(200).json({
+      message: "Profile photo removed successfully",
+      user,
+    });
+  } catch (error) {
+    console.error("Remove Avatar Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

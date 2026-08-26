@@ -191,13 +191,18 @@ export default function OrderDetailPage() {
           {addr && (
             <div className="card p-5">
               <p className="eyebrow mb-3">Shipping To</p>
-              <p className="text-sm font-semibold">{addr.full_name}</p>
+              <p className="text-sm font-semibold">
+                {addr.fullName || `${addr.firstName} ${addr.lastName}`}
+              </p>
               <p
                 className="mt-1 flex gap-1.5 text-sm leading-relaxed"
                 style={{ color: "var(--ink-soft)" }}
               >
                 <MapPinIcon size={15} className="mt-0.5 shrink-0" />
-                {addr.street}, {addr.city}, {addr.state} — {addr.pincode}
+                {[addr.addressLine1, addr.addressLine2, addr.landmark]
+                  .filter(Boolean)
+                  .join(", ")}
+                , {addr.city}, {addr.state} — {addr.zipCode}
               </p>
               <p className="mt-1 text-xs" style={{ color: "var(--ink-muted)" }}>
                 Phone: {addr.phone}

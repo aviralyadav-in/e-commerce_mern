@@ -31,9 +31,18 @@ export default function AccountPage() {
 
   // Default address, warna pehla saved
   const primaryAddress =
-    addresses.find((a) => a.is_default) || addresses[0] || null;
+    addresses.find((a) => a.isDefault) || addresses[0] || null;
   const addressText = primaryAddress
-    ? `${primaryAddress.street}, ${primaryAddress.city}, ${primaryAddress.state} — ${primaryAddress.pincode}`
+    ? [
+        primaryAddress.addressLine1,
+        primaryAddress.addressLine2,
+        primaryAddress.landmark,
+        primaryAddress.city,
+        primaryAddress.state,
+      ]
+        .filter(Boolean)
+        .join(", ") +
+      (primaryAddress.zipCode ? ` — ${primaryAddress.zipCode}` : "")
     : "";
 
   const fields = [
