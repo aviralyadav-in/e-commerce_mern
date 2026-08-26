@@ -2,6 +2,7 @@ import express from "express";
 import {
   addToCart,
   getCart,
+  updateCartItem,
   removeFromCart,
   clearCart,
   getAllCarts,
@@ -29,6 +30,9 @@ cartRouter.get("/", getCart);
 
 // 2. Add Item to Cart / Update Quantity (POST /api/cart/add)
 cartRouter.post("/add", addToCart);
+
+// 2b. Set Absolute Quantity of a Cart Item (PUT /api/cart/update/:productId)
+cartRouter.put("/update/:productId", updateCartItem);
 
 // 3. Remove Specific Item from Cart (DELETE /api/cart/remove/:productId)
 cartRouter.delete("/remove/:productId", removeFromCart);

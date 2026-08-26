@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchProducts,
@@ -7,14 +7,23 @@ import {
 } from "../features/products/productsSlice";
 import { fetchCategories } from "../features/categories/categoriesSlice";
 import { exportAllProductsToExcel } from "../utils/exportProductToExcel";
+import { toastInfo } from "../features/ui/uiSlice";
 
+import PageHeader from "../components/common/PageHeader";
 import ProductTable from "../components/products/ProductTable";
 import ProductModal from "../components/products/ProductModal";
-import Loader from "../components/common/Loader";
+import BulkProductDrawer from "../components/products/BulkProductDrawer";
+import SearchInput from "../components/common/SearchInput";
+import SegmentedFilter from "../components/common/SegmentedFilter";
+import ErrorBanner from "../components/common/ErrorBanner";
+import TableSkeleton from "../components/common/TableSkeleton";
+import { formatCurrency } from "../utils/format";
+import { DownloadIcon, LayersIcon, PlusIcon } from "../components/common/Icon";
+
+const LOW_STOCK = 5;
 
 const ProductsPage = () => {
   const dispatch = useDispatch();
-
   const { products, loading, error, selectedCategoryId } = useSelector(
     (state) => state.products,
   );
@@ -23,113 +32,206 @@ const ProductsPage = () => {
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editData, setEditData] = useState(null);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [stockFilter, setStockFilter] = useState(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     if (categories.length === 0) dispatch(fetchCategories());
+  }, [dispatch, categories.length]);
 
+  useEffect(() => {
     if (selectedCategoryId) {
-      dispatch(fetchProductsByCategory(selectedCategoryId));
+      if (debouncedSearch) {
+        dispatch(
+          fetchProducts({
+            categoryId: selectedCategoryId,
+            search: debouncedSearch,
+            limit: 100,
+          }),
+        );
+      } else {
+        dispatch(fetchProductsByCategory(selectedCategoryId));
+      }
     } else {
-      dispatch(fetchProducts());
+      dispatch(
+        fetchProducts({
+          search: debouncedSearch || undefined,
+          limit: 100,
+        }),
+      );
     }
-  }, [dispatch, selectedCategoryId]);
+  }, [dispatch, selectedCategoryId, debouncedSearch]);
 
-  const handleCategoryFilter = (e) => {
-    const catId = e.target.value;
-    dispatch(setSelectedCategory(catId === "" ? null : catId));
+  const getCategoryName = (id) => {
+    if (typeof id === "object" && id?.name) return id.name;
+    const catId = typeof id === "object" ? id?._id : id;
+    const cat = categories.find((c) => c._id === catId);
+    return cat ? cat.name : "Unknown Category";
   };
 
-  const handleOpenAdd = () => {
+  const stats = useMemo(() => {
+    let inventoryValue = 0;
+    let low = 0;
+    let out = 0;
+    let hidden = 0;
+    products.forEach((p) => {
+      const stock = Number(p.stock) || 0;
+      inventoryValue += (Number(p.discountPrice || p.price) || 0) * stock;
+      if (stock === 0) out += 1;
+      else if (stock <= LOW_STOCK) low += 1;
+      if (!p.isActive) hidden += 1;
+    });
+    return { inventoryValue, low, out, hidden };
+  }, [products]);
+
+  const list = useMemo(() => {
+    if (!stockFilter) return products;
+    return products.filter((p) => {
+      const stock = Number(p.stock) || 0;
+      if (stockFilter === "low") return stock > 0 && stock <= LOW_STOCK;
+      if (stockFilter === "out") return stock === 0;
+      if (stockFilter === "hidden") return !p.isActive;
+      return true;
+    });
+  }, [products, stockFilter]);
+
+  const handleExportAll = () => {
+    if (!products.length) {
+      dispatch(toastInfo("Nothing to export", "No products match this view."));
+      return;
+    }
+    exportAllProductsToExcel(products, getCategoryName);
+  };
+
+  const openAdd = () => {
     setEditData(null);
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (product) => {
-    setEditData(product);
-    setIsModalOpen(true);
-  };
-
-  const handleExportAll = () => {
-    if (!products.length) {
-      alert("No products available to export.");
-      return;
-    }
-    const getCategoryName = (id) => {
-      if (typeof id === "object" && id?.name) return id.name;
-      const catId = typeof id === "object" ? id?._id : id;
-      const cat = categories.find((c) => c._id === catId);
-      return cat ? cat.name : "Unknown Category";
-    };
-    exportAllProductsToExcel(products, getCategoryName);
-  };
-
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Products</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage your inventory, prices, and stock status.
-          </p>
-        </div>
+    <div className="page-shell">
+      <PageHeader
+        title="Products"
+        subtitle="Your bag catalog — pricing, stock and visibility on the storefront."
+        meta={
+          <>
+            <span className="meta-chip">
+              <b>{products.length}</b> in view
+            </span>
+            <span className="meta-chip meta-chip-success">
+              <b>{formatCurrency(stats.inventoryValue, { compact: true })}</b>{" "}
+              inventory value
+            </span>
+            {stats.low > 0 && (
+              <span className="meta-chip meta-chip-warning">
+                <b>{stats.low}</b> low stock
+              </span>
+            )}
+            {stats.out > 0 && (
+              <span className="meta-chip meta-chip-danger">
+                <b>{stats.out}</b> out of stock
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <>
+            <button onClick={handleExportAll} className="btn btn-export">
+              <DownloadIcon className="w-4 h-4" />
+              Export
+            </button>
+            <button
+              onClick={() => setIsBulkOpen(true)}
+              className="btn btn-secondary"
+            >
+              <LayersIcon className="w-4 h-4" />
+              Bulk add
+            </button>
+            <button onClick={openAdd} className="btn btn-primary">
+              <PlusIcon className="w-4 h-4" />
+              Add product
+            </button>
+          </>
+        }
+      />
 
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-          <select
-            value={selectedCategoryId || ""}
-            onChange={handleCategoryFilter}
-            className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-600 outline-none bg-white text-gray-700 shadow-sm"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat._id} value={cat._id}>
-                {cat.name}
-              </option>
-            ))}
-          </select>
-
-          <button
-            onClick={handleExportAll}
-            title="Download all products as Excel"
-            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-sm shadow-emerald-200"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export Excel
-          </button>
-
-          <button
-            onClick={handleOpenAdd}
-            className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center justify-center gap-2 shadow-sm shadow-indigo-200"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Product
-          </button>
-        </div>
+      <div className="admin-toolbar mb-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search products…"
+        />
+        <select
+          value={selectedCategoryId || ""}
+          onChange={(e) =>
+            dispatch(
+              setSelectedCategory(e.target.value === "" ? null : e.target.value),
+            )
+          }
+          className="admin-select"
+          aria-label="Filter by category"
+        >
+          <option value="">All categories</option>
+          {categories.map((cat) => (
+            <option key={cat._id} value={cat._id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+        <SegmentedFilter
+          value={stockFilter}
+          onChange={setStockFilter}
+          options={[
+            { value: null, label: "All", count: products.length },
+            { value: "low", label: "Low", count: stats.low },
+            { value: "out", label: "Out", count: stats.out },
+            { value: "hidden", label: "Hidden", count: stats.hidden },
+          ]}
+        />
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner
+        message={error}
+        onRetry={() => dispatch(fetchProducts({ limit: 100 }))}
+      />
 
-      {/* Main Content */}
-      {loading || catLoading ? (
-        <Loader />
+      {(loading || catLoading) && products.length === 0 ? (
+        <TableSkeleton rows={8} columns={7} hasThumb />
       ) : (
-        <ProductTable products={products} onEdit={handleOpenEdit} />
+        <ProductTable
+          products={list}
+          onCreate={openAdd}
+          onEdit={(p) => {
+            setEditData(p);
+            setIsModalOpen(true);
+          }}
+        />
       )}
 
-      {/* Modal */}
       <ProductModal
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditData(null);
+        }}
         editData={editData}
       />
+
+      {/* Conditional render — har baar fresh state ke saath mount hota hai */}
+      {isBulkOpen && (
+        <BulkProductDrawer
+          isOpen
+          onClose={() => setIsBulkOpen(false)}
+        />
+      )}
     </div>
   );
 };

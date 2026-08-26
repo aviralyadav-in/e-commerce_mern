@@ -1,155 +1,212 @@
-import React from "react";
+import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { deleteCoupon } from "../../features/coupons/couponsSlice";
+import useTableControls from "../../hooks/useTableControls";
+import ConfirmDialog from "../common/ConfirmDialog";
+import EmptyState from "../common/EmptyState";
+import Pagination from "../common/Pagination";
+import SortableTh from "../common/SortableTh";
+import { formatCurrency, formatDate } from "../../utils/format";
+import { TagIcon, PencilIcon, TrashIcon, PlusIcon } from "../common/Icon";
 
-const CouponTable = ({ coupons, onEdit }) => {
+export const isExpired = (date) => !!date && new Date(date) < new Date();
+
+/** A coupon is only usable when it is switched on AND still in date. */
+export const couponState = (coupon) => {
+  if (isExpired(coupon.expiryDate)) return "expired";
+  return coupon.isActive ? "active" : "paused";
+};
+
+const STATE_BADGE = {
+  active: { className: "badge-success", label: "Active" },
+  paused: { className: "badge-neutral", label: "Paused" },
+  expired: { className: "badge-danger", label: "Expired" },
+};
+
+const ACCESSORS = {
+  code: (c) => c.code,
+  discount: (c) => Number(c.discountValue) || 0,
+  minOrder: (c) => Number(c.minOrderValue) || 0,
+  expiry: (c) => (c.expiryDate ? new Date(c.expiryDate).getTime() : null),
+  status: (c) => couponState(c),
+};
+
+const CouponTable = ({ coupons, onEdit, onCreate }) => {
   const dispatch = useDispatch();
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this coupon?")) {
-      dispatch(deleteCoupon(id));
-    }
+  const table = useTableControls(coupons, {
+    accessors: ACCESSORS,
+    initialSort: { key: "expiry", dir: "asc" },
+    pageSize: 10,
+  });
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    dispatch(deleteCoupon(deleteTarget._id));
+    setDeleteTarget(null);
   };
 
-  // Check if coupon is expired
-  const isExpired = (date) => new Date(date) < new Date();
-
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-              <th className="px-6 py-4 font-medium">Code</th>
-              <th className="px-6 py-4 font-medium">Discount</th>
-              <th className="px-6 py-4 font-medium">Min Order</th>
-              <th className="px-6 py-4 font-medium">Expiry Date</th>
-              <th className="px-6 py-4 font-medium">Status</th>
-              <th className="px-6 py-4 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 text-sm">
-            {coupons.length > 0 ? (
-              coupons.map((coupon) => (
-                <tr
-                  key={coupon._id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  {/* Coupon Code */}
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-gray-900 bg-indigo-50 px-3 py-1.5 rounded-lg text-sm tracking-wider border border-indigo-100">
-                      {coupon.code}
-                    </span>
-                  </td>
+    <>
+      <div className="admin-table-wrap">
+        <div className="overflow-x-auto admin-scroll">
+          <table className="admin-table min-w-205">
+            <thead>
+              <tr>
+                <SortableTh
+                  label="Code"
+                  sortKey="code"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Discount"
+                  sortKey="discount"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Min order"
+                  sortKey="minOrder"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                  align="right"
+                />
+                <SortableTh
+                  label="Expires"
+                  sortKey="expiry"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Status"
+                  sortKey="status"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <th scope="col" className="text-right">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {table.rows.length > 0 ? (
+                table.rows.map((coupon) => {
+                  const state = couponState(coupon);
+                  const badge = STATE_BADGE[state];
+                  const expired = state === "expired";
 
-                  {/* Discount */}
-                  <td className="px-6 py-4">
-                    <span className="font-bold text-gray-900 text-base">
-                      {coupon.discountType === "percentage"
-                        ? `${coupon.discountValue}%`
-                        : `₹${coupon.discountValue}`}
-                    </span>
-                    <span className="text-xs text-gray-400 block mt-0.5 capitalize">
-                      {coupon.discountType}
-                    </span>
-                  </td>
-
-                  {/* Min Order Value */}
-                  <td className="px-6 py-4 text-gray-600 font-medium">
-                    ₹{(coupon.minOrderValue || 0).toLocaleString("en-IN")}
-                  </td>
-
-                  {/* Expiry Date */}
-                  <td className="px-6 py-4">
-                    <span
-                      className={`font-medium ${
-                        isExpired(coupon.expiryDate)
-                          ? "text-red-500"
-                          : "text-gray-600"
-                      }`}
-                    >
-                      {new Date(coupon.expiryDate).toLocaleDateString()}
-                    </span>
-                    {isExpired(coupon.expiryDate) && (
-                      <span className="text-xs text-red-400 block mt-0.5">
-                        Expired
-                      </span>
-                    )}
-                  </td>
-
-                  {/* Status */}
-                  <td className="px-6 py-4">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider
-                        ${
-                          coupon.isActive && !isExpired(coupon.expiryDate)
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }
-                      `}
-                    >
-                      {coupon.isActive && !isExpired(coupon.expiryDate)
-                        ? "Active"
-                        : "Inactive"}
-                    </span>
-                  </td>
-
-                  {/* Actions */}
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        onClick={() => onEdit(coupon)}
-                        className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
+                  return (
+                    <tr key={coupon._id}>
+                      <td>
+                        <span className="code-chip">{coupon.code}</span>
+                      </td>
+                      <td>
+                        <p className="cell-strong">
+                          {coupon.discountType === "percentage"
+                            ? `${coupon.discountValue}% off`
+                            : `${formatCurrency(coupon.discountValue)} off`}
+                        </p>
+                        <span className="cell-sub capitalize">
+                          {coupon.discountType === "percentage"
+                            ? "Percentage"
+                            : "Flat amount"}
+                        </span>
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        {coupon.minOrderValue
+                          ? formatCurrency(coupon.minOrderValue)
+                          : "—"}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <span
+                          className={expired ? "text-red-600 font-medium" : ""}
                         >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        onClick={() => handleDelete(coupon._id)}
-                        className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <svg
-                          className="w-4 h-4"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
+                          {formatDate(coupon.expiryDate)}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge badge-dot ${badge.className}`}>
+                          {badge.label}
+                        </span>
+                      </td>
+                      <td className="text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => onEdit(coupon)}
+                            title="Edit coupon"
+                            aria-label={`Edit ${coupon.code}`}
+                            className="icon-btn icon-btn-edit"
+                          >
+                            <PencilIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(coupon)}
+                            title="Delete coupon"
+                            aria-label={`Delete ${coupon.code}`}
+                            className="icon-btn icon-btn-delete"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="6" className="empty-cell">
+                    <EmptyState
+                      icon={<TagIcon className="w-5 h-5" />}
+                      title="No coupons yet"
+                      message="Create a discount code that customers can apply at checkout."
+                      action={
+                        onCreate && (
+                          <button
+                            onClick={onCreate}
+                            className="btn btn-primary btn-sm"
+                          >
+                            <PlusIcon className="w-3.5 h-3.5" />
+                            Add coupon
+                          </button>
+                        )
+                      }
+                    />
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                  No coupons found. Click 'Add Coupon' to create one.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          total={table.total}
+          rangeStart={table.rangeStart}
+          rangeEnd={table.rangeEnd}
+          onPage={table.setPage}
+          onPageSize={table.setPageSize}
+          noun="coupons"
+        />
       </div>
-    </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete coupon?"
+        message={
+          deleteTarget
+            ? `Customers will no longer be able to apply “${deleteTarget.code}”. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete coupon"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </>
   );
 };
 

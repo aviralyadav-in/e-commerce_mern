@@ -1,194 +1,266 @@
-import React from "react";
+import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   updateOrderStatus,
   deleteOrder,
 } from "../../features/orders/ordersSlice";
+import useTableControls from "../../hooks/useTableControls";
+import ConfirmDialog from "../common/ConfirmDialog";
+import EmptyState from "../common/EmptyState";
+import Pagination from "../common/Pagination";
+import SortableTh from "../common/SortableTh";
+import {
+  formatCurrency,
+  formatDate,
+  initials,
+  shortId,
+} from "../../utils/format";
+import { ClipboardIcon, EyeIcon, TrashIcon } from "../common/Icon";
 
-const OrderTable = ({ orders }) => {
+export const ORDER_STATUSES = [
+  "Pending",
+  "Processing",
+  "Shipped",
+  "Delivered",
+  "Cancelled",
+];
+
+/** Sorting by status should follow the fulfilment pipeline, not the alphabet. */
+const STATUS_RANK = ORDER_STATUSES.reduce(
+  (acc, status, i) => ({ ...acc, [status]: i }),
+  {},
+);
+
+const STATUS_SELECT = {
+  Pending: "border-orange-200 bg-orange-50 text-orange-700",
+  Processing: "border-amber-200 bg-amber-50 text-amber-700",
+  Shipped: "border-blue-200 bg-blue-50 text-blue-700",
+  Delivered: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  Cancelled: "border-red-200 bg-red-50 text-red-700",
+};
+
+const PAYMENT_BADGE = {
+  Completed: "badge-success",
+  Pending: "badge-warning",
+  Failed: "badge-danger",
+  Refunded: "badge-info",
+};
+
+const OrderTable = ({ orders, onView }) => {
   const dispatch = useDispatch();
-
-  // Redux store se users ka data liya taaki unka naam dikha sakein
   const { users } = useSelector((state) => state.users);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const getCustomerName = (user) => {
-    // FIX: Backend "user" field bhejta hai, "userId" nahi
-    // order.user populated object ho sakta hai ya sirf string id
     if (typeof user === "object" && user?.name) return user.name;
     const idStr = typeof user === "object" ? user?._id : user;
     const found = users.find((u) => u._id === idStr);
-    return found ? found.name : "Unknown Customer";
+    return found ? found.name : "Unknown";
   };
 
-  // Status Update Handler
-  const handleStatusChange = (orderId, newStatus) => {
-    if (window.confirm(`Update order status to ${newStatus}?`)) {
-      dispatch(updateOrderStatus({ id: orderId, orderStatus: newStatus }));
-    }
-  };
+  const table = useTableControls(orders, {
+    accessors: {
+      order: (o) => (o.createdAt ? new Date(o.createdAt).getTime() : null),
+      customer: (o) => getCustomerName(o.user),
+      total: (o) => Number(o.totalAmount) || 0,
+      payment: (o) => o.paymentMethod || "",
+      status: (o) => STATUS_RANK[o.orderStatus] ?? 99,
+    },
+    initialSort: { key: "order", dir: "desc" },
+    pageSize: 10,
+  });
 
-  // Delete Order Handler
-  const handleDelete = (orderId) => {
-    if (
-      window.confirm("Are you sure you want to delete this order entirely?")
-    ) {
-      dispatch(deleteOrder(orderId));
-    }
-  };
-
-  // Status ke liye color mapping
-  const getStatusStyles = (status) => {
-    switch (status) {
-      case "Delivered":
-        return "border-green-200 bg-green-50 text-green-700";
-      case "Shipped":
-        return "border-blue-200 bg-blue-50 text-blue-700";
-      case "Processing":
-        return "border-yellow-200 bg-yellow-50 text-yellow-700";
-      case "Cancelled":
-        return "border-red-200 bg-red-50 text-red-700";
-      case "Pending":
-      default:
-        return "border-orange-200 bg-orange-50 text-orange-700";
-    }
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    dispatch(deleteOrder(deleteTarget._id));
+    setDeleteTarget(null);
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-              <th className="px-6 py-4 font-medium">Order ID & Date</th>
-              <th className="px-6 py-4 font-medium">Customer Details</th>
-              <th className="px-6 py-4 font-medium">Items & Total</th>
-              <th className="px-6 py-4 font-medium">Status Update</th>
-              <th className="px-6 py-4 font-medium text-right">Delete</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 text-sm">
-            {orders.length > 0 ? (
-              orders.map((order) => (
-                <tr
-                  key={order._id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  {/* Order ID & Date */}
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-gray-900">
-                        {order._id}
-                      </span>
-                      <span className="text-xs text-gray-500 mt-1">
-                        {new Date(order.createdAt || order.orderDate).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </td>
+    <>
+      <div className="admin-table-wrap">
+        <div className="overflow-x-auto admin-scroll">
+          <table className="admin-table min-w-240">
+            <thead>
+              <tr>
+                <SortableTh
+                  label="Order"
+                  sortKey="order"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Customer"
+                  sortKey="customer"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Total"
+                  sortKey="total"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                  align="right"
+                />
+                <SortableTh
+                  label="Payment"
+                  sortKey="payment"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Status"
+                  sortKey="status"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <th scope="col" className="text-right">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {table.rows.length > 0 ? (
+                table.rows.map((order) => {
+                  const itemCount = order.orderItems?.length || 0;
+                  const email =
+                    typeof order.user === "object" ? order.user?.email : "";
 
-                  {/* Customer Details — FIX: order.user use karna hai, order.userId nahi */}
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="font-semibold text-gray-800">
-                        {getCustomerName(order.user)}
-                      </span>
-                      <span className="text-xs text-gray-400">
-                        ID: {typeof order.user === "object" ? order.user?._id : order.user}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Items & Total — FIX: order.orderItems use karna hai, order.items nahi */}
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-gray-600 text-xs mb-1">
-                        {order.orderItems?.length || 0}{" "}
-                        {(order.orderItems?.length || 0) > 1 ? "items" : "item"}
-                      </span>
-                      <span className="font-bold text-gray-900 text-base">
-                        ₹{(order.totalAmount || 0).toLocaleString("en-IN")}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Status Dropdown — FIX: Pending + Cancelled options add kiye */}
-                  <td className="px-6 py-4">
-                    <select
-                      value={order.orderStatus}
-                      onChange={(e) =>
-                        handleStatusChange(order._id, e.target.value)
-                      }
-                      className={`px-3 py-1.5 rounded-lg text-sm font-semibold border-2 outline-none cursor-pointer transition-colors
-                        ${getStatusStyles(order.orderStatus)}
-                      `}
-                    >
-                      <option
-                        value="Pending"
-                        className="text-gray-800 bg-white"
-                      >
-                        Pending
-                      </option>
-                      <option
-                        value="Processing"
-                        className="text-gray-800 bg-white"
-                      >
-                        Processing
-                      </option>
-                      <option
-                        value="Shipped"
-                        className="text-gray-800 bg-white"
-                      >
-                        Shipped
-                      </option>
-                      <option
-                        value="Delivered"
-                        className="text-gray-800 bg-white"
-                      >
-                        Delivered
-                      </option>
-                      <option
-                        value="Cancelled"
-                        className="text-gray-800 bg-white"
-                      >
-                        Cancelled
-                      </option>
-                    </select>
-                  </td>
-
-                  {/* Delete Button */}
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleDelete(order._id)}
-                      className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                      title="Delete Order"
-                    >
-                      <svg
-                        className="w-4 h-4"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
+                  return (
+                    <tr key={order._id}>
+                      <td>
+                        <p className="font-mono text-[12px] font-semibold text-(--ink)">
+                          {shortId(order._id)}
+                        </p>
+                        <span className="cell-sub">
+                          {formatDate(order.createdAt || order.orderDate)}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2.5">
+                          <div className="avatar w-7 h-7 text-[10.5px]">
+                            {initials(getCustomerName(order.user))}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="cell-strong truncate max-w-42.5">
+                              {getCustomerName(order.user)}
+                            </p>
+                            <span className="cell-sub truncate max-w-42.5">
+                              {email || "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        <p className="cell-strong">
+                          {formatCurrency(order.totalAmount)}
+                        </p>
+                        <span className="cell-sub">
+                          {itemCount} item{itemCount === 1 ? "" : "s"}
+                        </span>
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <p className="cell-strong">
+                          {order.paymentMethod || "—"}
+                        </p>
+                        <span
+                          className={`badge ${
+                            PAYMENT_BADGE[order.paymentStatus] ||
+                            "badge-neutral"
+                          }`}
+                        >
+                          {order.paymentStatus || "Unknown"}
+                        </span>
+                      </td>
+                      <td>
+                        <select
+                          value={order.orderStatus}
+                          onChange={(e) =>
+                            dispatch(
+                              updateOrderStatus({
+                                id: order._id,
+                                orderStatus: e.target.value,
+                              }),
+                            )
+                          }
+                          aria-label={`Order status for ${shortId(order._id)}`}
+                          className={`px-2 py-1 rounded-md text-[12px] font-semibold border outline-none cursor-pointer transition-colors ${
+                            STATUS_SELECT[order.orderStatus] ||
+                            "border-(--border) bg-white text-(--ink)"
+                          }`}
+                        >
+                          {ORDER_STATUSES.map((status) => (
+                            <option key={status} value={status}>
+                              {status}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => onView(order._id)}
+                            className="icon-btn icon-btn-view"
+                            title="View order details"
+                            aria-label={`View ${shortId(order._id)}`}
+                          >
+                            <EyeIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(order)}
+                            className="icon-btn icon-btn-delete"
+                            title="Delete order"
+                            aria-label={`Delete ${shortId(order._id)}`}
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="6" className="empty-cell">
+                    <EmptyState
+                      icon={<ClipboardIcon className="w-5 h-5" />}
+                      title="No orders found"
+                      message="Orders placed on the storefront land here. Try clearing the status filter or search."
+                    />
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                  No orders found.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          total={table.total}
+          rangeStart={table.rangeStart}
+          rangeEnd={table.rangeEnd}
+          onPage={table.setPage}
+          onPageSize={table.setPageSize}
+          noun="orders"
+        />
       </div>
-    </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete order?"
+        message={
+          deleteTarget
+            ? `Order ${shortId(deleteTarget._id)} will be permanently deleted. Consider marking it Cancelled instead if you need the record.`
+            : ""
+        }
+        confirmLabel="Delete order"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </>
   );
 };
 

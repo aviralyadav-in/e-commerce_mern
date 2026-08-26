@@ -3,15 +3,14 @@ import { z } from "zod";
 export const productValidationSchema = z.object({
   categoryId: z
     .string({
-      required_error: "Category is required",
-      invalid_type_error: "Category ID must be a string",
+      error: "Category is required",
     })
     // MongoDB ObjectId format validation
     .regex(/^[0-9a-fA-F]{24}$/, "Invalid Category ID format"),
 
   name: z
     .string({
-      required_error: "Product name is required",
+      error: "Product name is required",
     })
     .trim()
     .min(3, "Product name must be at least 3 characters")
@@ -19,7 +18,7 @@ export const productValidationSchema = z.object({
 
   slug: z
     .string({
-      required_error: "Slug is required",
+      error: "Slug is required",
     })
     .trim()
     .toLowerCase()
@@ -27,7 +26,7 @@ export const productValidationSchema = z.object({
 
   description: z
     .string({
-      required_error: "Product description is required",
+      error: "Product description is required",
     })
     .trim()
     .min(10, "Description must be at least 10 characters")
@@ -37,7 +36,7 @@ export const productValidationSchema = z.object({
 
   subCategory: z
     .enum(["Men", "Women", "Unisex"], {
-      errorMap: () => ({ message: "Sub-category must be Men, Women, or Unisex" }),
+      error: "Sub-category must be Men, Women, or Unisex",
     })
     .optional()
     .default("Unisex"),
@@ -45,33 +44,24 @@ export const productValidationSchema = z.object({
   // 🔥 IMAGE SCHEMA UPDATED HERE 🔥
   images: z.object({
     desktop: z
-      .array(
-        z.string({
-          invalid_type_error: "Desktop image URL must be a string",
-        }),
-      )
+      .array(z.string({ error: "Desktop image URL must be a string" }))
       .min(1, "Please provide at least one desktop image."), // Mandatory
 
     mobile: z
-      .array(
-        z.string({
-          invalid_type_error: "Mobile image URL must be a string",
-        }),
-      )
+      .array(z.string({ error: "Mobile image URL must be a string" }))
       .optional()
       .default([]), // Optional with default empty array
   }),
 
   price: z
     .number({
-      required_error: "Product price is required",
-      invalid_type_error: "Price must be a number",
+      error: "Product price is required and must be a number",
     })
     .min(0, "Price cannot be negative"),
 
   discountPrice: z
     .number({
-      invalid_type_error: "Discount price must be a number",
+      error: "Discount price must be a number",
     })
     .min(0, "Discount price cannot be negative")
     .nullable()
@@ -80,7 +70,7 @@ export const productValidationSchema = z.object({
 
   sku: z
     .string({
-      required_error: "SKU is required",
+      error: "SKU is required",
     })
     .trim()
     .toUpperCase() // Mongoose ke uppercase: true ke liye
@@ -88,8 +78,7 @@ export const productValidationSchema = z.object({
 
   stock: z
     .number({
-      required_error: "Stock is required",
-      invalid_type_error: "Stock must be a number",
+      error: "Stock is required and must be a number",
     })
     .min(0, "Stock cannot be negative")
     .optional()
@@ -97,7 +86,7 @@ export const productValidationSchema = z.object({
 
   isActive: z
     .boolean({
-      invalid_type_error: "isActive must be a boolean",
+      error: "isActive must be a boolean",
     })
     .optional()
     .default(true),
@@ -105,4 +94,12 @@ export const productValidationSchema = z.object({
   averageRating: z.number().optional().default(0),
 
   numOfReviews: z.number().optional().default(0),
+
+  // Collection flags (FormData se "true"/"false" string aata hai,
+  // controller use boolean me parse karta hai)
+  isFeatured: z.boolean().optional().default(false),
+
+  isBestSeller: z.boolean().optional().default(false),
+
+  isNewArrival: z.boolean().optional().default(false),
 });

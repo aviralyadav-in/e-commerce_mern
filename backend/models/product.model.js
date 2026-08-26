@@ -98,6 +98,20 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+
+    // Collection flags — Shop page filters & badges ke liye
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+    isBestSeller: {
+      type: Boolean,
+      default: false,
+    },
+    isNewArrival: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

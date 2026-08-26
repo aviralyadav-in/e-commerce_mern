@@ -1,6 +1,8 @@
 import { Order } from "../models/order.model.js";
 import { Product } from "../models/product.model.js";
 import { Address } from "../models/address.model.js";
+import { Coupon } from "../models/coupon.model.js";
+import { Cart } from "../models/cart.model.js";
 import { z } from "zod";
 
 // MongoDB ObjectId validator
@@ -20,10 +22,14 @@ const createOrderRequestSchema = z.object({
     )
     .min(1, "Order must contain at least one item"),
   paymentMethod: z.enum(["COD", "Card", "UPI"], {
-    errorMap: () => ({ message: "Payment method must be COD, Card, or UPI" }),
+    error: "Payment method must be COD, Card, or UPI",
   }),
   couponCode: z.string().optional(),
 });
+
+// Storefront (utils/shipping.js + OrderBreakdown) ke saath identical shipping rules
+const FREE_SHIP_THRESHOLD = 500;
+const SHIPPING_FEE = 50;
 
 /* =========================================================
    1. CREATE NEW ORDER (User Route)
@@ -83,38 +89,84 @@ export const createOrder = async (req, res) => {
       });
     }
 
-    // 3. Calculate Shipping & Discounts
-    // Example logic: Free shipping on orders above 500, else 50
-    const shippingPrice = itemsPrice > 500 ? 0 : 50;
-
-    // Yahan aap apne Coupon model se real discount calculate kar sakte hain
+    // 3. Coupon Validation & Real Discount Calculation
     let discountAmount = 0;
+    let appliedCouponCode = null;
 
-    const totalAmount = itemsPrice + shippingPrice - discountAmount;
+    if (couponCode) {
+      const normalizedCode = String(couponCode).trim().toUpperCase();
+      const coupon = await Coupon.findOne({ code: normalizedCode });
 
-    // 4. Create Order
+      if (!coupon || !coupon.isActive) {
+        return res
+          .status(400)
+          .json({ message: "Invalid or inactive coupon code" });
+      }
+
+      if (new Date() > new Date(coupon.expiryDate)) {
+        return res.status(400).json({ message: "This coupon has expired" });
+      }
+
+      if (itemsPrice < coupon.minOrderValue) {
+        return res.status(400).json({
+          message: `Minimum order value must be ₹${coupon.minOrderValue} to use this coupon`,
+        });
+      }
+
+      if (coupon.discountType === "percentage") {
+        discountAmount = (itemsPrice * coupon.discountValue) / 100;
+      } else if (coupon.discountType === "flat") {
+        discountAmount = coupon.discountValue;
+      }
+
+      // Discount kabhi items ke total se zyada nahi ho sakta
+      discountAmount = Math.min(discountAmount, itemsPrice);
+      appliedCouponCode = coupon.code;
+    }
+
+    // 4. Shipping — storefront CartSummary jaisa hi (discounted amount par based)
+    const afterDiscount = Math.max(0, itemsPrice - discountAmount);
+    const shippingPrice =
+      itemsPrice > 0 && afterDiscount <= FREE_SHIP_THRESHOLD
+        ? SHIPPING_FEE
+        : 0;
+
+    const totalAmount = Math.max(0, afterDiscount + shippingPrice);
+
+    // 5. Create Order
     const order = await Order.create({
       user: userId,
       shippingAddress,
       orderItems: finalOrderItems,
       itemsPrice,
       shippingPrice,
-      couponCode: couponCode || null,
+      couponCode: appliedCouponCode,
       discountAmount,
       totalAmount,
       paymentMethod,
       paymentStatus: paymentMethod === "COD" ? "Pending" : "Completed", // Placeholder logic
     });
 
-    // 5. Deduct Stock from Products
+    // 6. Deduct Stock from Products
     for (const item of finalOrderItems) {
       await Product.findByIdAndUpdate(item.product, {
         $inc: { stock: -item.quantity },
       });
     }
 
-    // OPTIONAL: Yahan aap user ka Cart clear kar sakte hain
-    // await Cart.findOneAndUpdate({ user: userId }, { items: [], totalPrice: 0 });
+    // 7. Order place hone ke baad user ka Cart server-side clear karo
+    await Cart.findOneAndUpdate(
+      { user: userId },
+      {
+        $set: {
+          items: [],
+          totalPrice: 0,
+          couponApplied: null,
+          discountAmount: 0,
+          totalAmountAfterDiscount: 0,
+        },
+      },
+    );
 
     return res.status(201).json({
       message: "Order placed successfully",
@@ -163,7 +215,11 @@ export const getOrderById = async (req, res) => {
 
     // Security Check: Sirf order ka owner ya Admin isko dekh sakta hai
     // FIX: User model mein role field nahi hai, admin middleware req.admin set karta hai
-    const isOwner = req.user && order.user._id.toString() === req.user._id.toString();
+    // FIX: Agar order ka user delete ho chuka hai toh populate null return karega — crash se bachao
+    const ownerId = order.user?._id
+      ? order.user._id.toString()
+      : String(order.user);
+    const isOwner = req.user && ownerId === req.user._id.toString();
     const isAdmin = req.admin?.role === "SuperAdmin";
 
     if (!isOwner && !isAdmin) {
@@ -233,6 +289,9 @@ export const updateOrderStatus = async (req, res) => {
         .json({ message: "You have already delivered this order" });
     }
 
+    // FIX: Pehle ka status yaad rakho (cancel par sirf EK baar stock restore ho)
+    const previousStatus = order.orderStatus;
+
     // Update Statuses
     if (orderStatus) {
       order.orderStatus = orderStatus;
@@ -240,6 +299,16 @@ export const updateOrderStatus = async (req, res) => {
       if (orderStatus === "Delivered") {
         order.deliveredAt = Date.now();
         order.paymentStatus = "Completed"; // COD orders ke liye
+      }
+    }
+
+    // FIX: Cancel hone par products ka stock wapas restore karo
+    // (sirf tab jab pehle se cancelled na ho — double restore se bachne ke liye)
+    if (orderStatus === "Cancelled" && previousStatus !== "Cancelled") {
+      for (const item of order.orderItems) {
+        await Product.findByIdAndUpdate(item.product, {
+          $inc: { stock: item.quantity },
+        });
       }
     }
 
@@ -254,6 +323,28 @@ export const updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error("Update Order Status Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   6. DELETE ORDER (Admin Route)
+========================================================= */
+export const deleteOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    await Order.findByIdAndDelete(req.params.id);
+
+    return res.status(200).json({
+      message: "Order deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete Order Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

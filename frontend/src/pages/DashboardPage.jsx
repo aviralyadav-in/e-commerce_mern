@@ -1,18 +1,72 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
+import { Link } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchUsers } from "../features/users/usersSlice";
 import { fetchCategories } from "../features/categories/categoriesSlice";
 import { fetchProducts } from "../features/products/productsSlice";
 import { fetchOrders } from "../features/orders/ordersSlice";
 
-// Components
+import PageHeader from "../components/common/PageHeader";
 import StatCard from "../components/common/StatCard";
 import Loader from "../components/common/Loader";
+import EmptyState from "../components/common/EmptyState";
+import RevenueChart from "../components/dashboard/RevenueChart";
+import {
+  formatCurrency,
+  formatDate,
+  formatNumber,
+  shortId,
+} from "../utils/format";
+import {
+  BagIcon,
+  CheckCircleIcon,
+  PackageIcon,
+  RupeeIcon,
+  UsersIcon,
+} from "../components/common/Icon";
+
+const STATUS_BADGE = {
+  Pending: "badge-warning",
+  Processing: "badge-info",
+  Shipped: "badge-brand",
+  Delivered: "badge-success",
+  Cancelled: "badge-danger",
+};
+
+/** Pipeline bar colour per stage, so the mix is readable at a glance. */
+const STATUS_BAR = {
+  Pending: "var(--warning)",
+  Processing: "var(--info)",
+  Shipped: "var(--brand)",
+  Delivered: "var(--success)",
+  Cancelled: "var(--danger)",
+};
+
+const DAY = 24 * 60 * 60 * 1000;
+const LOW_STOCK = 5;
+
+/** Cancelled orders never became money, so they stay out of revenue. */
+const isRevenue = (order) => order.orderStatus !== "Cancelled";
+
+/** Reference instant for the trailing-window comparisons. */
+const nowMs = () => Date.now();
+
+/** Last millisecond of today, so the newest bucket covers the whole day. */
+const endOfToday = () => {
+  const d = new Date(nowMs());
+  d.setHours(23, 59, 59, 999);
+  return d.getTime();
+};
+
+const orderTime = (order) => {
+  const raw = order.createdAt || order.orderDate;
+  const t = raw ? new Date(raw).getTime() : NaN;
+  return Number.isNaN(t) ? 0 : t;
+};
 
 const DashboardPage = () => {
   const dispatch = useDispatch();
 
-  // Redux store se saara data aur loading states nikalna
   const { users, loading: usersLoading } = useSelector((state) => state.users);
   const { categories, loading: catLoading } = useSelector(
     (state) => state.categories,
@@ -24,191 +78,348 @@ const DashboardPage = () => {
     (state) => state.orders,
   );
 
-  // Component mount hote hi saara data fetch karna
   useEffect(() => {
     dispatch(fetchUsers());
     dispatch(fetchCategories());
-    dispatch(fetchProducts());
+    dispatch(fetchProducts({ limit: 100 }));
     dispatch(fetchOrders());
   }, [dispatch]);
 
-  // Agar koi bhi API call chal rahi hai, toh Loader dikhao
   const isLoading = usersLoading || catLoading || prodLoading || ordersLoading;
 
-  if (isLoading) {
+  const stats = useMemo(() => {
+    const now = nowMs();
+    const paid = orders.filter(isRevenue);
+
+    const revenue = paid.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+    const last30 = paid.filter((o) => now - orderTime(o) < 30 * DAY);
+    const prev30 = paid.filter((o) => {
+      const age = now - orderTime(o);
+      return age >= 30 * DAY && age < 60 * DAY;
+    });
+
+    const sum = (list) =>
+      list.reduce((total, o) => total + (o.totalAmount || 0), 0);
+
+    /** Percent change vs the previous window; null when there's no baseline. */
+    const delta = (current, before) => {
+      if (!before) return null;
+      const pct = Math.round(((current - before) / before) * 100);
+      return {
+        value: `${pct > 0 ? "+" : ""}${pct}%`,
+        direction: pct < 0 ? "down" : "up",
+      };
+    };
+
+    const statusCounts = {
+      Pending: 0,
+      Processing: 0,
+      Shipped: 0,
+      Delivered: 0,
+      Cancelled: 0,
+    };
+    orders.forEach((o) => {
+      if (statusCounts[o.orderStatus] !== undefined) {
+        statusCounts[o.orderStatus] += 1;
+      }
+    });
+
+    return {
+      revenue,
+      revenueTrend: delta(sum(last30), sum(prev30)),
+      orderTrend: delta(last30.length, prev30.length),
+      openOrders: statusCounts.Pending + statusCounts.Processing,
+      statusCounts,
+      avgOrder: paid.length ? revenue / paid.length : 0,
+      newUsers: users.filter((u) => {
+        const t = u.createdAt ? new Date(u.createdAt).getTime() : NaN;
+        return !Number.isNaN(t) && now - t < 30 * DAY;
+      }).length,
+    };
+  }, [orders, users]);
+
+  /** Daily revenue for the trailing fortnight, oldest first. */
+  const series = useMemo(() => {
+    const end = endOfToday();
+    const buckets = Array.from({ length: 14 }, (_, i) => ({
+      label: formatDate(end - (13 - i) * DAY),
+      value: 0,
+    }));
+    orders.filter(isRevenue).forEach((o) => {
+      const age = end - orderTime(o);
+      const index = 13 - Math.floor(age / DAY);
+      if (index >= 0 && index < 14) {
+        buckets[index].value += o.totalAmount || 0;
+      }
+    });
+    return buckets;
+  }, [orders]);
+
+  const lowStock = useMemo(
+    () =>
+      products
+        .filter((p) => (p.stock ?? 0) <= LOW_STOCK)
+        .sort((a, b) => (a.stock ?? 0) - (b.stock ?? 0))
+        .slice(0, 6),
+    [products],
+  );
+
+  const recentOrders = useMemo(
+    () => [...orders].sort((a, b) => orderTime(b) - orderTime(a)).slice(0, 6),
+    [orders],
+  );
+
+  if (isLoading && !orders.length && !products.length) {
     return <Loader />;
   }
 
-  // --- Calculations for Dashboard ---
-  // 1. Total Revenue (Saare orders ke totalAmount ka sum)
-  const totalRevenue = orders.reduce(
-    (sum, order) => sum + (order.totalAmount || 0),
-    0,
-  );
-
-  // 2. Recent Orders (Aakhiri 5 orders nikalne ke liye reverse karke slice karna)
-  const recentOrders = [...orders].reverse().slice(0, 5);
+  const todayLabel = new Date().toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 
   return (
-    <div className="space-y-6">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-800">Dashboard Overview</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Welcome to your store's control panel. Here's what's happening today.
-        </p>
-      </div>
+    <div className="page-shell">
+      <PageHeader
+        title="Dashboard"
+        subtitle={`Store overview · ${todayLabel}`}
+        meta={
+          <>
+            <span className="meta-chip meta-chip-brand">
+              <b>{formatCurrency(stats.avgOrder, { compact: true })}</b> avg
+              order
+            </span>
+            <span className="meta-chip meta-chip-warning">
+              <b>{stats.openOrders}</b> awaiting action
+            </span>
+            <span className="meta-chip">
+              <b>{categories.length}</b> categories
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <Link to="/products" className="btn btn-secondary">
+              Products
+            </Link>
+            <Link to="/orders" className="btn btn-primary">
+              View orders
+            </Link>
+          </>
+        }
+      />
 
-      {/* Stat Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <StatCard
-          title="Total Revenue"
-          count={`₹${totalRevenue.toLocaleString("en-IN")}`}
-          bgColor="bg-green-100"
-          textColor="text-green-600"
-          icon={
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-          }
+          title="Revenue"
+          count={formatCurrency(stats.revenue, { compact: true })}
+          accent="green"
+          hint="Excludes cancelled orders"
+          trend={stats.revenueTrend}
+          icon={<RupeeIcon />}
         />
         <StatCard
-          title="Total Orders"
-          count={orders.length}
-          bgColor="bg-blue-100"
-          textColor="text-blue-600"
-          icon={
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"
-              />
-            </svg>
-          }
+          title="Orders"
+          count={formatNumber(orders.length)}
+          accent="blue"
+          hint={`${stats.openOrders} open`}
+          trend={stats.orderTrend}
+          icon={<BagIcon />}
         />
         <StatCard
-          title="Total Products"
-          count={products.length}
-          bgColor="bg-purple-100"
-          textColor="text-purple-600"
-          icon={
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"
-              />
-            </svg>
+          title="Products"
+          count={formatNumber(products.length)}
+          accent="orange"
+          hint={
+            lowStock.length
+              ? `${lowStock.length} need restocking`
+              : "Stock levels healthy"
           }
+          icon={<PackageIcon />}
         />
         <StatCard
-          title="Total Customers"
-          count={users.length}
-          bgColor="bg-orange-100"
-          textColor="text-orange-600"
-          icon={
-            <svg
-              className="w-6 h-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-              />
-            </svg>
-          }
+          title="Customers"
+          count={formatNumber(users.length)}
+          accent="slate"
+          hint={`${stats.newUsers} joined in 30 days`}
+          icon={<UsersIcon />}
         />
       </div>
 
-      {/* Recent Orders Section */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-8">
-        <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
-          <h2 className="text-lg font-bold text-gray-800">Recent Orders</h2>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-4">
+        <div className="xl:col-span-8">
+          <RevenueChart data={series} />
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-                <th className="px-6 py-4 font-medium">Order ID</th>
-                <th className="px-6 py-4 font-medium">Date</th>
-                <th className="px-6 py-4 font-medium">Amount</th>
-                <th className="px-6 py-4 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100 text-sm">
-              {recentOrders.length > 0 ? (
-                recentOrders.map((order) => (
-                  <tr
-                    key={order._id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 font-medium text-gray-900">
-                      {order._id}
-                    </td>
-                    <td className="px-6 py-4 text-gray-500">
-                      {new Date(order.createdAt || order.orderDate).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-gray-900 font-medium">
-                      ₹{order.totalAmount.toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium inline-block
-                          ${
-                            order.orderStatus === "Delivered"
-                              ? "bg-green-100 text-green-700"
-                              : order.orderStatus === "Shipped"
-                                ? "bg-blue-100 text-blue-700"
-                                : order.orderStatus === "Processing"
-                                  ? "bg-yellow-100 text-yellow-700"
-                                  : "bg-red-100 text-red-700"
-                          }`}
-                      >
-                        {order.orderStatus}
+        {/* Order pipeline */}
+        <div className="admin-card p-4 xl:col-span-4">
+          <div className="flex items-center justify-between mb-3.5">
+            <h2 className="admin-card-title">Order pipeline</h2>
+            <Link to="/orders" className="admin-link">
+              Manage
+            </Link>
+          </div>
+          {orders.length ? (
+            <div className="space-y-3">
+              {Object.entries(stats.statusCounts).map(([status, count]) => {
+                const pct = orders.length
+                  ? Math.round((count / orders.length) * 100)
+                  : 0;
+                return (
+                  <div key={status}>
+                    <div className="flex justify-between text-[12px] mb-1.5">
+                      <span className="font-medium text-(--ink-soft)">
+                        {status}
                       </span>
-                    </td>
+                      <span className="text-(--ink-muted) tabular-nums">
+                        {count} · {pct}%
+                      </span>
+                    </div>
+                    <div className="meter">
+                      <span
+                        style={{
+                          width: `${pct}%`,
+                          background: STATUS_BAR[status],
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-[12.5px] text-(--ink-faint) py-6 text-center">
+              No orders to break down yet.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        {/* Low stock */}
+        <div className="admin-card xl:col-span-5 overflow-hidden">
+          <div className="admin-card-header">
+            <h2 className="admin-card-title">Low stock inventory</h2>
+            <Link to="/products" className="admin-link">
+              View products
+            </Link>
+          </div>
+          {lowStock.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>SKU</th>
+                    <th className="text-right">Stock</th>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td
-                    colSpan="4"
-                    className="px-6 py-8 text-center text-gray-500"
-                  >
-                    No recent orders found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {lowStock.map((product) => (
+                    <tr key={product._id}>
+                      <td className="max-w-50">
+                        <span className="cell-strong block truncate">
+                          {product.name}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="code-chip">{product.sku || "—"}</span>
+                      </td>
+                      <td className="text-right">
+                        <span
+                          className={`badge ${
+                            (product.stock ?? 0) === 0
+                              ? "badge-danger"
+                              : "badge-warning"
+                          }`}
+                        >
+                          {product.stock ?? 0} left
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              compact
+              icon={<CheckCircleIcon className="w-5 h-5" />}
+              title="Stock looks healthy"
+              message={`Nothing is down to ${LOW_STOCK} units or fewer.`}
+            />
+          )}
+        </div>
+
+        {/* Recent orders */}
+        <div className="admin-card xl:col-span-7 overflow-hidden">
+          <div className="admin-card-header">
+            <h2 className="admin-card-title">Recent orders</h2>
+            <Link to="/orders" className="admin-link">
+              View all
+            </Link>
+          </div>
+          {recentOrders.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="admin-table">
+                <thead>
+                  <tr>
+                    <th>Order</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th className="text-right">Amount</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recentOrders.map((order) => (
+                    <tr key={order._id}>
+                      <td>
+                        <Link
+                          to="/orders"
+                          className="font-mono text-[12px] font-semibold text-(--ink) hover:text-(--brand)"
+                        >
+                          {shortId(order._id)}
+                        </Link>
+                      </td>
+                      <td className="max-w-40">
+                        <span className="cell-strong block truncate">
+                          {typeof order.user === "object"
+                            ? order.user?.name || "—"
+                            : "—"}
+                        </span>
+                      </td>
+                      <td className="text-(--ink-muted) whitespace-nowrap">
+                        {formatDate(order.createdAt || order.orderDate)}
+                      </td>
+                      <td className="text-right font-semibold tabular-nums">
+                        {formatCurrency(order.totalAmount)}
+                      </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            STATUS_BADGE[order.orderStatus] || "badge-neutral"
+                          }`}
+                        >
+                          <span className="badge-dot" />
+                          {order.orderStatus}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <EmptyState
+              compact
+              icon={<BagIcon className="w-5 h-5" />}
+              title="No orders yet"
+              message="Orders will appear here as soon as customers check out."
+            />
+          )}
         </div>
       </div>
     </div>

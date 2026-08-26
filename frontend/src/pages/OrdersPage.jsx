@@ -1,74 +1,165 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchOrders } from "../features/orders/ordersSlice";
-import { fetchUsers } from "../features/users/usersSlice"; // Customers ka naam dikhane ke liye chahiye
+import { fetchUsers } from "../features/users/usersSlice";
+import { exportAllOrdersToExcel } from "../utils/exportProductToExcel";
+import { toastInfo } from "../features/ui/uiSlice";
 
-// Components
-import OrderTable from "../components/orders/OrderTable";
-import Loader from "../components/common/Loader";
+import PageHeader from "../components/common/PageHeader";
+import OrderTable, { ORDER_STATUSES } from "../components/orders/OrderTable";
+import OrderDetailModal from "../components/orders/OrderDetailModal";
+import SearchInput from "../components/common/SearchInput";
+import SegmentedFilter from "../components/common/SegmentedFilter";
+import ErrorBanner from "../components/common/ErrorBanner";
+import TableSkeleton from "../components/common/TableSkeleton";
+import { formatCurrency } from "../utils/format";
+import { DownloadIcon, RefreshIcon } from "../components/common/Icon";
 
 const OrdersPage = () => {
   const dispatch = useDispatch();
-
   const { orders, loading, error } = useSelector((state) => state.orders);
   const { users } = useSelector((state) => state.users);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(null);
+  const [viewOrderId, setViewOrderId] = useState(null);
 
   useEffect(() => {
-    // Agar users ka data nahi hai, toh use bhi fetch karo
-    if (users.length === 0) {
-      dispatch(fetchUsers());
-    }
-    // Hamesha latest orders fetch karo page load par
+    if (users.length === 0) dispatch(fetchUsers());
     dispatch(fetchOrders());
   }, [dispatch, users.length]);
 
-  // Statistics calculate karna
-  const pendingOrders = orders.filter(
-    (o) => o.orderStatus === "Processing",
-  ).length;
-  const totalRevenue = orders.reduce(
-    (sum, order) => sum + (order.totalAmount || 0),
-    0,
+  const getCustomerName = (user) => {
+    if (typeof user === "object" && user?.name) return user.name;
+    const idStr = typeof user === "object" ? user?._id : user;
+    const found = users.find((u) => u._id === idStr);
+    return found ? found.name : "Unknown";
+  };
+
+  const statusCounts = useMemo(() => {
+    const counts = {};
+    ORDER_STATUSES.forEach((s) => (counts[s] = 0));
+    orders.forEach((o) => {
+      if (counts[o.orderStatus] != null) counts[o.orderStatus] += 1;
+    });
+    return counts;
+  }, [orders]);
+
+  const filteredOrders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return orders.filter((order) => {
+      if (status && order.orderStatus !== status) return false;
+      if (!q) return true;
+      const email =
+        typeof order.user === "object"
+          ? String(order.user?.email || "").toLowerCase()
+          : "";
+      return (
+        String(order._id || "").toLowerCase().includes(q) ||
+        getCustomerName(order.user).toLowerCase().includes(q) ||
+        email.includes(q) ||
+        String(order.orderStatus || "").toLowerCase().includes(q) ||
+        String(order.couponCode || "").toLowerCase().includes(q)
+      );
+    });
+  }, [orders, search, status, users]);
+
+  const openCount = statusCounts.Pending + statusCounts.Processing;
+
+  /** Cancelled orders never became money, so they stay out of revenue. */
+  const revenue = useMemo(
+    () =>
+      orders
+        .filter((o) => o.orderStatus !== "Cancelled")
+        .reduce((sum, o) => sum + (o.totalAmount || 0), 0),
+    [orders],
   );
 
+  const handleExport = () => {
+    if (!orders.length) {
+      dispatch(toastInfo("Nothing to export", "No orders have been placed yet."));
+      return;
+    }
+    exportAllOrdersToExcel(orders, getCustomerName);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header & Quick Stats */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Orders</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage customer orders and update their delivery status.
-          </p>
-        </div>
-
-        {/* Quick Badges */}
-        <div className="flex items-center gap-3 self-start lg:self-auto">
-          <div className="bg-yellow-50 border border-yellow-100 px-4 py-2 rounded-xl flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse"></span>
-            <span className="text-sm font-medium text-yellow-800">
-              Pending:
+    <div className="page-shell">
+      <PageHeader
+        title="Orders"
+        subtitle="Track fulfilment and update order status as parcels move."
+        meta={
+          <>
+            <span className="meta-chip meta-chip-success">
+              <b>{formatCurrency(revenue, { compact: true })}</b> revenue
             </span>
-            <span className="font-bold text-yellow-900">{pendingOrders}</span>
-          </div>
-
-          <div className="bg-green-50 border border-green-100 px-4 py-2 rounded-xl items-center gap-2 hidden sm:flex">
-            <span className="text-sm font-medium text-green-800">Revenue:</span>
-            <span className="font-bold text-green-900">
-              ₹{totalRevenue.toLocaleString("en-IN")}
+            <span className="meta-chip">
+              <b>{orders.length}</b> orders
             </span>
-          </div>
-        </div>
+            <span
+              className={`meta-chip ${
+                openCount > 0 ? "meta-chip-warning" : ""
+              }`}
+            >
+              <b>{openCount}</b> awaiting action
+            </span>
+            {statusCounts.Delivered > 0 && (
+              <span className="meta-chip meta-chip-info">
+                <b>{statusCounts.Delivered}</b> delivered
+              </span>
+            )}
+          </>
+        }
+        actions={
+          <>
+            <button
+              onClick={() => dispatch(fetchOrders())}
+              className="btn btn-secondary"
+              title="Refresh orders"
+            >
+              <RefreshIcon className="w-4 h-4" />
+              Refresh
+            </button>
+            <button onClick={handleExport} className="btn btn-export">
+              <DownloadIcon className="w-4 h-4" />
+              Export
+            </button>
+          </>
+        }
+      />
+
+      <div className="admin-toolbar mb-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search order id, customer, coupon…"
+        />
+        <SegmentedFilter
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: null, label: "All", count: orders.length },
+            ...ORDER_STATUSES.map((s) => ({
+              value: s,
+              label: s,
+              count: statusCounts[s],
+            })),
+          ]}
+        />
       </div>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
-          {error}
-        </div>
+      <ErrorBanner message={error} onRetry={() => dispatch(fetchOrders())} />
+
+      {loading && orders.length === 0 ? (
+        <TableSkeleton rows={8} columns={6} />
+      ) : (
+        <OrderTable orders={filteredOrders} onView={(id) => setViewOrderId(id)} />
       )}
 
-      {/* Main Content Area */}
-      {loading ? <Loader /> : <OrderTable orders={orders} />}
+      <OrderDetailModal
+        isOpen={!!viewOrderId}
+        orderId={viewOrderId}
+        onClose={() => setViewOrderId(null)}
+      />
     </div>
   );
 };

@@ -1,12 +1,30 @@
-import React from "react";
+import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { deleteProduct } from "../../features/products/productsSlice";
 import { exportProductToExcel } from "../../utils/exportProductToExcel";
-import { getAssetUrl } from "../../utils/assetUrl";
+import useTableControls from "../../hooks/useTableControls";
+import ConfirmDialog from "../common/ConfirmDialog";
+import EmptyState from "../common/EmptyState";
+import Pagination from "../common/Pagination";
+import SortableTh from "../common/SortableTh";
+import Thumb from "../common/Thumb";
+import { formatCurrency } from "../../utils/format";
+import {
+  BagIcon,
+  DownloadIcon,
+  PencilIcon,
+  PlusIcon,
+  StarFilledIcon,
+  TrashIcon,
+} from "../common/Icon";
 
-const ProductTable = ({ products, onEdit }) => {
+/** Below this many units we nudge the admin to restock. */
+const LOW_STOCK = 5;
+
+const ProductTable = ({ products, onEdit, onCreate }) => {
   const dispatch = useDispatch();
   const { categories } = useSelector((state) => state.categories);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   const getCategoryName = (id) => {
     if (typeof id === "object" && id?.name) return id.name;
@@ -15,156 +33,252 @@ const ProductTable = ({ products, onEdit }) => {
     return cat ? cat.name : "Unknown";
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm("Are you sure you want to delete this product?")) {
-      dispatch(deleteProduct(id));
-    }
-  };
+  const table = useTableControls(products, {
+    accessors: {
+      name: (p) => p.name || "",
+      category: (p) => getCategoryName(p.categoryId),
+      sub: (p) => p.subCategory || "",
+      price: (p) => Number(p.discountPrice || p.price) || 0,
+      stock: (p) => Number(p.stock) || 0,
+      rating: (p) => Number(p.averageRating) || 0,
+    },
+    initialSort: { key: "name", dir: "asc" },
+    pageSize: 10,
+  });
 
-  const handleDownload = (product) => {
-    exportProductToExcel(product, getCategoryName(product.categoryId));
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    dispatch(deleteProduct(deleteTarget._id));
+    setDeleteTarget(null);
   };
-
-  const getImageSrc = (prod) =>
-    prod.images?.desktop?.[0]
-      ? getAssetUrl(prod.images.desktop[0])
-      : "https://via.placeholder.com/150";
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[900px]">
-          <thead>
-            <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-              <th className="px-5 py-4 font-medium">Product</th>
-              <th className="px-5 py-4 font-medium">Category</th>
-              <th className="px-5 py-4 font-medium">Sub Category</th>
-              <th className="px-5 py-4 font-medium">Price</th>
-              <th className="px-5 py-4 font-medium">Stock / Status</th>
-              <th className="px-5 py-4 font-medium">Rating</th>
-              <th className="px-5 py-4 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 text-sm">
-            {products.length > 0 ? (
-              products.map((prod) => (
-                  <tr key={prod._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={getImageSrc(prod)}
-                          alt={prod.name}
-                          className="w-12 h-12 rounded-lg object-cover border border-gray-200 shrink-0"
-                        />
-                        <span className="font-bold text-gray-900 block truncate max-w-[180px]">
-                          {prod.name}
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="px-5 py-4 text-gray-600">
-                      {getCategoryName(prod.categoryId)}
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium ${
-                          prod.subCategory === "Men"
-                            ? "bg-blue-50 text-blue-700"
-                            : prod.subCategory === "Women"
-                              ? "bg-pink-50 text-pink-700"
-                              : "bg-gray-100 text-gray-600"
-                        }`}
-                      >
-                        {prod.subCategory || "Unisex"}
-                      </span>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-gray-900">
-                          ₹{prod.price?.toLocaleString("en-IN") || 0}
-                        </span>
-                        {prod.discountPrice != null && prod.discountPrice > 0 && (
-                          <span className="text-xs text-emerald-600 font-medium">
-                            Sale: ₹{prod.discountPrice.toLocaleString("en-IN")}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="flex flex-col items-start gap-1">
-                        <span className="text-gray-600 font-medium">
-                          Qty: {prod.stock ?? 0}
-                        </span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                            prod.isActive
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
-                          }`}
-                        >
-                          {prod.isActive ? "In Stock" : "Out of Stock"}
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="px-5 py-4">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-gray-800">
-                          ★ {(prod.averageRating ?? 0).toFixed(1)}
-                        </span>
-                        <span className="text-xs text-gray-400">
-                          {prod.numOfReviews ?? 0} reviews
-                        </span>
-                      </div>
-                    </td>
-
-                    <td className="px-5 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => handleDownload(prod)}
-                          title="Download product details (Excel)"
-                          className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => onEdit(prod)}
-                          title="Edit product"
-                          className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => handleDelete(prod._id)}
-                          title="Delete product"
-                          className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-              ))
-            ) : (
+    <>
+      <div className="admin-table-wrap">
+        <div className="overflow-x-auto admin-scroll">
+          <table className="admin-table min-w-245">
+            <thead>
               <tr>
-                <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
-                  No products found. Add some!
-                </td>
+                <SortableTh
+                  label="Product"
+                  sortKey="name"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Category"
+                  sortKey="category"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Segment"
+                  sortKey="sub"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Price"
+                  sortKey="price"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                  align="right"
+                />
+                <SortableTh
+                  label="Stock"
+                  sortKey="stock"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Rating"
+                  sortKey="rating"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                  align="right"
+                />
+                <th scope="col" className="text-right">
+                  Actions
+                </th>
               </tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {table.rows.length > 0 ? (
+                table.rows.map((prod) => {
+                  const stock = prod.stock ?? 0;
+                  const hasDiscount =
+                    prod.discountPrice != null && prod.discountPrice > 0;
+
+                  return (
+                    <tr key={prod._id}>
+                      <td>
+                        <div className="flex items-center gap-2.5">
+                          <Thumb
+                            src={prod.images?.desktop?.[0]}
+                            alt={prod.name}
+                            className="w-9 h-9"
+                          />
+                          <div className="min-w-0">
+                            <p className="cell-strong truncate max-w-47.5">
+                              {prod.name}
+                            </p>
+                            <span className="cell-sub truncate max-w-47.5">
+                              {prod.brand || prod.material || "—"}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {getCategoryName(prod.categoryId)}
+                      </td>
+                      <td>
+                        <span className="badge badge-neutral capitalize">
+                          {prod.subCategory || "Unisex"}
+                        </span>
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        {hasDiscount ? (
+                          <>
+                            <p className="cell-strong text-emerald-700">
+                              {formatCurrency(prod.discountPrice)}
+                            </p>
+                            <span className="cell-sub line-through">
+                              {formatCurrency(prod.price)}
+                            </span>
+                          </>
+                        ) : (
+                          <p className="cell-strong">
+                            {formatCurrency(prod.price)}
+                          </p>
+                        )}
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-semibold ${
+                              stock === 0
+                                ? "text-red-600"
+                                : stock <= LOW_STOCK
+                                  ? "text-amber-600"
+                                  : "text-(--ink)"
+                            }`}
+                          >
+                            {stock}
+                          </span>
+                          {!prod.isActive ? (
+                            <span className="badge badge-neutral">Hidden</span>
+                          ) : stock === 0 ? (
+                            <span className="badge badge-danger">
+                              Out of stock
+                            </span>
+                          ) : stock <= LOW_STOCK ? (
+                            <span className="badge badge-warning">Low</span>
+                          ) : (
+                            <span className="badge badge-success">Live</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1">
+                          <StarFilledIcon className="w-3.5 h-3.5 text-amber-400" />
+                          <span className="cell-strong">
+                            {(prod.averageRating ?? 0).toFixed(1)}
+                          </span>
+                        </div>
+                        <span className="cell-sub">
+                          {prod.numOfReviews ?? 0} review
+                          {(prod.numOfReviews ?? 0) === 1 ? "" : "s"}
+                        </span>
+                      </td>
+                      <td className="text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() =>
+                              exportProductToExcel(
+                                prod,
+                                getCategoryName(prod.categoryId),
+                              )
+                            }
+                            title="Export to Excel"
+                            aria-label={`Export ${prod.name}`}
+                            className="icon-btn icon-btn-download"
+                          >
+                            <DownloadIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => onEdit(prod)}
+                            title="Edit product"
+                            aria-label={`Edit ${prod.name}`}
+                            className="icon-btn icon-btn-edit"
+                          >
+                            <PencilIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setDeleteTarget(prod)}
+                            title="Delete product"
+                            aria-label={`Delete ${prod.name}`}
+                            className="icon-btn icon-btn-delete"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan="7" className="empty-cell">
+                    <EmptyState
+                      icon={<BagIcon className="w-5 h-5" />}
+                      title="No products found"
+                      message="Add your first bag to the catalog, or clear the filters to see everything."
+                      action={
+                        onCreate && (
+                          <button
+                            onClick={onCreate}
+                            className="btn btn-primary btn-sm"
+                          >
+                            <PlusIcon className="w-3.5 h-3.5" />
+                            Add product
+                          </button>
+                        )
+                      }
+                    />
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          total={table.total}
+          rangeStart={table.rangeStart}
+          rangeEnd={table.rangeEnd}
+          onPage={table.setPage}
+          onPageSize={table.setPageSize}
+          noun="products"
+        />
       </div>
-    </div>
+
+      <ConfirmDialog
+        isOpen={!!deleteTarget}
+        title="Delete product?"
+        message={
+          deleteTarget
+            ? `“${deleteTarget.name}” will be permanently removed from your catalog. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete product"
+        variant="danger"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </>
   );
 };
 

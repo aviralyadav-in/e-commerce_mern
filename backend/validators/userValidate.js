@@ -3,8 +3,7 @@ import { z } from "zod";
 export const userValidationSchema = z.object({
   name: z
     .string({
-      required_error: "Name is required",
-      invalid_type_error: "Name must be a string",
+      error: "Name is required",
     })
     .trim()
     .min(2, "Name must be at least 2 characters")
@@ -12,7 +11,7 @@ export const userValidationSchema = z.object({
 
   email: z
     .string({
-      required_error: "Email is required",
+      error: "Email is required",
     })
     .trim()
     .toLowerCase()
@@ -23,7 +22,7 @@ export const userValidationSchema = z.object({
 
   password: z
     .string({
-      required_error: "Password is required",
+      error: "Password is required",
     })
     .min(8, "Password must be at least 8 characters"),
 
@@ -39,23 +38,23 @@ export const userValidationSchema = z.object({
   avatar: z.string().optional().default(""),
 
   gender: z
-    .enum(["male", "female", "other", "prefer_not_to_say"], {
-      errorMap: () => ({ message: "Invalid gender value" }),
+    .enum(["male", "female"], {
+      error: "Invalid gender value",
     })
-    .default("prefer_not_to_say"),
+    .default("male"),
 
   dateOfBirth: z.coerce.date().nullable().optional().default(null),
 });
 
 export const loginSchema = z.object({
   email: z
-    .string({ required_error: "Email is required" })
+    .string({ error: "Email is required" })
     .trim()
     .toLowerCase()
     .email("Please enter a valid email"),
 
   password: z
-    .string({ required_error: "Password is required" })
+    .string({ error: "Password is required" })
     .min(1, "Password is required"), // Yahan min 8 check karne ki zarurat nahi, sirf ye check karna hai ki empty na ho
 });
 
@@ -84,7 +83,7 @@ export const updateProfileSchema = z.object({
 
   avatar: z.string().optional(),
 
-  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
+  gender: z.enum(["male", "female"]).optional(),
 
   dateOfBirth: z.coerce.date().nullable().optional(),
 });
@@ -124,7 +123,7 @@ export const adminUpdateUserSchema = z.object({
 
   avatar: z.string().optional(),
 
-  gender: z.enum(["male", "female", "other", "prefer_not_to_say"]).optional(),
+  gender: z.enum(["male", "female"]).optional(),
 
   dateOfBirth: z.coerce.date().nullable().optional(),
 });

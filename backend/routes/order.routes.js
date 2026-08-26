@@ -5,6 +5,7 @@ import {
   getOrderById,
   getAllOrders,
   updateOrderStatus,
+  deleteOrder,
 } from "../controllers/order.controller.js";
 
 // Middleware imports (Apne paths ke hisab se adjust kar lein)
@@ -27,6 +28,9 @@ orderRouter.get("/admin/:id", adminRoute, getOrderById);
 
 // 3. Update order status (Admin)
 orderRouter.put("/admin/:id/status", adminRoute, updateOrderStatus);
+
+// 4. Delete order (Admin)
+orderRouter.delete("/admin/:id", adminRoute, deleteOrder);
 
 // ==========================================
 // 🧑‍💻 USER ROUTES (Logged-in users ke liye)

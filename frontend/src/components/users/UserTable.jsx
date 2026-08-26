@@ -1,11 +1,35 @@
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { deleteUser } from "../../features/users/usersSlice";
+import useTableControls from "../../hooks/useTableControls";
 import ConfirmDialog from "../common/ConfirmDialog";
+import EmptyState from "../common/EmptyState";
+import Pagination from "../common/Pagination";
+import SortableTh from "../common/SortableTh";
+import { formatDate, initials } from "../../utils/format";
+import { PencilIcon, PlusIcon, TrashIcon, UsersIcon } from "../common/Icon";
 
-const UserTable = ({ users, onEdit }) => {
+const GENDER_LABEL = {
+  male: "Male",
+  female: "Female",
+};
+
+const ACCESSORS = {
+  name: (u) => u.name || "",
+  email: (u) => u.email || "",
+  gender: (u) => GENDER_LABEL[u.gender] || "",
+  joined: (u) => (u.createdAt ? new Date(u.createdAt).getTime() : null),
+};
+
+const UserTable = ({ users, onEdit, onCreate }) => {
   const dispatch = useDispatch();
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const table = useTableControls(users, {
+    accessors: ACCESSORS,
+    initialSort: { key: "joined", dir: "desc" },
+    pageSize: 10,
+  });
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
@@ -15,147 +39,90 @@ const UserTable = ({ users, onEdit }) => {
 
   return (
     <>
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
+      <div className="admin-table-wrap">
+        <div className="overflow-x-auto admin-scroll">
+          <table className="admin-table min-w-205">
             <thead>
-              <tr className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
-                <th className="px-6 py-4 font-medium">Customer</th>
-                <th className="px-6 py-4 font-medium">Contact</th>
-                <th className="px-6 py-4 font-medium">Gender</th>
-                <th className="px-6 py-4 font-medium">Joined Date</th>
-                <th className="px-6 py-4 font-medium text-right">Actions</th>
+              <tr>
+                <SortableTh
+                  label="Customer"
+                  sortKey="name"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Contact"
+                  sortKey="email"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Gender"
+                  sortKey="gender"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Joined"
+                  sortKey="joined"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <th scope="col" className="text-right">
+                  Actions
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-sm">
-              {users.length > 0 ? (
-                users.map((user) => (
-                  <tr
-                    key={user._id}
-                    className="hover:bg-gray-50 transition-colors"
-                  >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-sm shrink-0">
-                          {user.name?.charAt(0).toUpperCase() || "U"}
+            <tbody>
+              {table.rows.length > 0 ? (
+                table.rows.map((user) => (
+                  <tr key={user._id}>
+                    <td>
+                      <div className="flex items-center gap-2.5">
+                        <div className="avatar w-8 h-8">
+                          {initials(user.name)}
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-gray-900 truncate">
+                        <div className="min-w-0">
+                          <p className="cell-strong truncate max-w-45">
                             {user.name}
-                          </span>
-                          <span className="text-xs text-gray-400 truncate">
-                            ID: {user._id}
+                          </p>
+                          <span className="cell-sub font-mono">
+                            {String(user._id).slice(-8)}
                           </span>
                         </div>
                       </div>
                     </td>
-
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col space-y-1">
-                        <div className="flex items-center gap-2 text-gray-600">
-                          <svg
-                            className="w-4 h-4 shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                            />
-                          </svg>
-                          <span className="truncate">{user.email}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-gray-500 text-xs">
-                          <svg
-                            className="w-4 h-4 shrink-0"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"
-                            />
-                          </svg>
-                          <span>{user.phone || "N/A"}</span>
-                        </div>
-                      </div>
+                    <td>
+                      <p className="truncate max-w-52.5 text-(--ink)">
+                        {user.email}
+                      </p>
+                      <span className="cell-sub">{user.phone || "—"}</span>
                     </td>
-
-                    <td className="px-6 py-4">
-                      <span
-                        className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize
-                        ${
-                          user.gender === "male"
-                            ? "bg-blue-50 text-blue-700"
-                            : user.gender === "female"
-                              ? "bg-pink-50 text-pink-700"
-                              : user.gender === "other"
-                                ? "bg-purple-50 text-purple-700"
-                                : "bg-gray-100 text-gray-500"
-                        }
-                      `}
-                      >
-                        {user.gender === "prefer_not_to_say"
-                          ? "Not Specified"
-                          : user.gender || "N/A"}
+                    <td>
+                      <span className="badge badge-neutral">
+                        {GENDER_LABEL[user.gender] || "—"}
                       </span>
                     </td>
-
-                    <td className="px-6 py-4 text-gray-500 font-medium">
-                      {user.createdAt
-                        ? new Date(user.createdAt).toLocaleDateString("en-IN", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          })
-                        : "Unknown"}
+                    <td className="whitespace-nowrap">
+                      {formatDate(user.createdAt)}
                     </td>
-
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex justify-end gap-2">
+                    <td className="text-right">
+                      <div className="flex justify-end gap-1.5">
                         <button
                           onClick={() => onEdit(user)}
-                          title="Edit user"
-                          className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+                          title="Edit customer"
+                          aria-label={`Edit ${user.name}`}
+                          className="icon-btn icon-btn-edit"
                         >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-                            />
-                          </svg>
+                          <PencilIcon className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setDeleteTarget(user)}
-                          title="Delete user"
-                          className="p-2 text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+                          title="Delete customer"
+                          aria-label={`Delete ${user.name}`}
+                          className="icon-btn icon-btn-delete"
                         >
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                            />
-                          </svg>
+                          <TrashIcon className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </td>
@@ -163,26 +130,52 @@ const UserTable = ({ users, onEdit }) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                    No users found. Add a customer to get started.
+                  <td colSpan="5" className="empty-cell">
+                    <EmptyState
+                      icon={<UsersIcon className="w-5 h-5" />}
+                      title="No customers found"
+                      message="Customers who register on the storefront appear here. You can also add one manually."
+                      action={
+                        onCreate && (
+                          <button
+                            onClick={onCreate}
+                            className="btn btn-primary btn-sm"
+                          >
+                            <PlusIcon className="w-3.5 h-3.5" />
+                            Add customer
+                          </button>
+                        )
+                      }
+                    />
                   </td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
+
+        <Pagination
+          page={table.page}
+          pageCount={table.pageCount}
+          pageSize={table.pageSize}
+          total={table.total}
+          rangeStart={table.rangeStart}
+          rangeEnd={table.rangeEnd}
+          onPage={table.setPage}
+          onPageSize={table.setPageSize}
+          noun="customers"
+        />
       </div>
 
       <ConfirmDialog
         isOpen={!!deleteTarget}
-        title="Delete user?"
+        title="Delete customer?"
         message={
           deleteTarget
-            ? `Are you sure you want to delete "${deleteTarget.name}"? Their cart and wishlist will also be removed. This cannot be undone.`
+            ? `“${deleteTarget.name}” will be deleted along with their cart and wishlist. This cannot be undone.`
             : ""
         }
-        confirmLabel="Delete"
-        cancelLabel="Cancel"
+        confirmLabel="Delete customer"
         variant="danger"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}

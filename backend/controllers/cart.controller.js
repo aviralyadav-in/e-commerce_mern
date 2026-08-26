@@ -17,6 +17,14 @@ const addToCartRequestSchema = z.object({
     .default(1),
 });
 
+// Absolute quantity set karne ke liye (PUT /cart/update/:productId)
+const updateCartItemSchema = z.object({
+  quantity: z
+    .number({ error: "Quantity must be a number" })
+    .int("Quantity must be an integer")
+    .min(1, "Quantity cannot be less than 1"),
+});
+
 /* =========================================================
    HELPER FUNCTION: Calculate Cart Totals
 ========================================================= */
@@ -114,7 +122,7 @@ export const getCart = async (req, res) => {
 
     let cart = await Cart.findOne({ user: userId })
       .populate("items.product", "name images price stock")
-      .populate("couponApplied", "code discount"); // Agar coupon banaya hai
+      .populate("couponApplied", "code discountType discountValue"); // FIX: Coupon model ke real fields
 
     if (!cart) {
       // Agar naya user hai aur cart nahi bana, toh empty structure bhej do
@@ -135,6 +143,73 @@ export const getCart = async (req, res) => {
     });
   } catch (error) {
     console.error("Get Cart Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   2b. UPDATE ITEM QUANTITY (Absolute set)
+   Frontend quantity stepper ke liye — remove/add hack ki
+   zaroorat nahi, seedha absolute quantity set hoti hai.
+========================================================= */
+export const updateCartItem = async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const userId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(productId)) {
+      return res.status(400).json({ message: "Invalid Product ID" });
+    }
+
+    const result = updateCartItemSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: result.error.issues[0].message,
+      });
+    }
+
+    const { quantity } = result.data;
+
+    const cart = await Cart.findOne({ user: userId });
+    if (!cart) {
+      return res.status(404).json({ message: "Cart not found" });
+    }
+
+    const itemIndex = cart.items.findIndex(
+      (item) => item.product.toString() === productId,
+    );
+    if (itemIndex === -1) {
+      return res
+        .status(404)
+        .json({ message: "Product not found in your cart" });
+    }
+
+    // Stock check — real product se
+    const productExists = await Product.findById(productId);
+    if (!productExists || !productExists.isActive) {
+      return res.status(404).json({ message: "Product not found or inactive" });
+    }
+    if (productExists.stock < quantity) {
+      return res.status(400).json({
+        message: `Insufficient stock! Only ${productExists.stock} left`,
+      });
+    }
+
+    // Absolute quantity set karo aur price sync rakho
+    cart.items[itemIndex].quantity = quantity;
+    cart.items[itemIndex].price = productExists.price;
+
+    calculateCartTotals(cart);
+    await cart.save();
+
+    await cart.populate("items.product", "name images price stock");
+
+    return res.status(200).json({
+      message: "Cart updated successfully",
+      cart,
+    });
+  } catch (error) {
+    console.error("Update Cart Item Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

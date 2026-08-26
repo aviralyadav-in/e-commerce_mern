@@ -1,7 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import API from "../../api/axios";
 
-// 1. Fetch All Orders
 export const fetchOrders = createAsyncThunk(
   "orders/fetchAll",
   async (_, { rejectWithValue }) => {
@@ -9,22 +8,35 @@ export const fetchOrders = createAsyncThunk(
       const response = await API.get("/orders/admin/all-orders");
       return response.data.orders || [];
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Error fetching orders");
+      return rejectWithValue(
+        error.response?.data?.message || "Error fetching orders",
+      );
     }
   },
 );
 
-// 2. Update Order Status
-// Admin sirf order ka status update kar sakta hai
-// jaise "Processing" -> "Shipped" -> "Delivered"
+export const fetchOrderById = createAsyncThunk(
+  "orders/fetchById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await API.get(`/orders/admin/${id}`);
+      return response.data.order;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Error fetching order details",
+      );
+    }
+  },
+);
+
 export const updateOrderStatus = createAsyncThunk(
   "orders/updateStatus",
   async ({ id, orderStatus }, { rejectWithValue }) => {
     try {
       const response = await API.put(`/orders/admin/${id}/status`, {
-        orderStatus: orderStatus,
+        orderStatus,
       });
-      return response.data.order; // Ye updated order object return karega
+      return response.data.order;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Error updating order status",
@@ -33,7 +45,6 @@ export const updateOrderStatus = createAsyncThunk(
   },
 );
 
-// 3. Delete Order (Backend doesn't have an admin delete order right now, but keeping it if needed)
 export const deleteOrder = createAsyncThunk(
   "orders/delete",
   async (id, { rejectWithValue }) => {
@@ -41,7 +52,9 @@ export const deleteOrder = createAsyncThunk(
       await API.delete(`/orders/admin/${id}`);
       return id;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Error deleting order");
+      return rejectWithValue(
+        error.response?.data?.message || "Error deleting order",
+      );
     }
   },
 );
@@ -50,13 +63,18 @@ const ordersSlice = createSlice({
   name: "orders",
   initialState: {
     orders: [],
+    selectedOrder: null,
+    detailLoading: false,
     loading: false,
     error: null,
   },
-  reducers: {},
+  reducers: {
+    clearSelectedOrder: (state) => {
+      state.selectedOrder = null;
+    },
+  },
   extraReducers: (builder) => {
     builder
-      // Fetch All Orders
       .addCase(fetchOrders.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -69,42 +87,45 @@ const ordersSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-
-      // Update Order Status
-      .addCase(updateOrderStatus.pending, (state) => {
-        state.loading = true;
+      .addCase(fetchOrderById.pending, (state) => {
+        state.detailLoading = true;
         state.error = null;
       })
+      .addCase(fetchOrderById.fulfilled, (state, action) => {
+        state.detailLoading = false;
+        state.selectedOrder = action.payload;
+      })
+      .addCase(fetchOrderById.rejected, (state, action) => {
+        state.detailLoading = false;
+        state.error = action.payload;
+      })
       .addCase(updateOrderStatus.fulfilled, (state, action) => {
-        state.loading = false;
         const index = state.orders.findIndex(
           (order) => order._id === action.payload._id,
         );
         if (index !== -1) {
           state.orders[index] = action.payload;
         }
+        if (state.selectedOrder?._id === action.payload._id) {
+          state.selectedOrder = action.payload;
+        }
       })
       .addCase(updateOrderStatus.rejected, (state, action) => {
-        state.loading = false;
         state.error = action.payload;
       })
-
-      // Delete Order
-      .addCase(deleteOrder.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
       .addCase(deleteOrder.fulfilled, (state, action) => {
-        state.loading = false;
         state.orders = state.orders.filter(
           (order) => order._id !== action.payload,
         );
+        if (state.selectedOrder?._id === action.payload) {
+          state.selectedOrder = null;
+        }
       })
       .addCase(deleteOrder.rejected, (state, action) => {
-        state.loading = false;
         state.error = action.payload;
       });
   },
 });
 
+export const { clearSelectedOrder } = ordersSlice.actions;
 export default ordersSlice.reducer;

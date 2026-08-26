@@ -3,7 +3,6 @@ import { Routes, Route, Navigate } from "react-router";
 import Layout from "./components/layout/Layout";
 import ProtectedRoute from "./components/common/ProtectedRoute";
 
-// Pages Import
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import UsersPage from "./pages/UsersPage";
@@ -14,14 +13,13 @@ import BannersPage from "./pages/BannersPage";
 import CouponsPage from "./pages/CouponsPage";
 import WishlistPage from "./pages/WishlistPage";
 import AdminCartPage from "./pages/AdminCartPage";
+import ReviewsPage from "./pages/ReviewsPage";
 
 function App() {
   return (
     <Routes>
-      {/* Public Route - Koi bhi dekh sakta hai */}
       <Route path="/login" element={<LoginPage />} />
 
-      {/* Protected Admin Routes - Sirf logged in admin dekh sakta hai */}
       <Route
         path="/"
         element={
@@ -30,10 +28,7 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* Agar seedha '/' par jaye, toh dashboard par bhej do */}
         <Route index element={<Navigate to="/dashboard" replace />} />
-
-        {/* Actual Pages */}
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="categories" element={<CategoriesPage />} />
@@ -41,15 +36,14 @@ function App() {
         <Route path="orders" element={<OrdersPage />} />
         <Route path="banners" element={<BannersPage />} />
         <Route path="coupons" element={<CouponsPage />} />
+        <Route path="reviews" element={<ReviewsPage />} />
         <Route path="wishlists" element={<WishlistPage />} />
         <Route path="carts" element={<AdminCartPage />} />
       </Route>
 
-      {/* 404 Route - Agar koi galat URL daale, toh usko wapas dashboard bhejo */}
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }
 
 export default App;
-

@@ -1,26 +1,47 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchBanners } from "../features/banners/bannersSlice";
+import { exportAllBannersToExcel } from "../utils/exportProductToExcel";
+import { toastInfo } from "../features/ui/uiSlice";
 
-// Components
 import BannerTable from "../components/banners/BannerTable";
 import BannerModal from "../components/banners/BannerModal";
-import Loader from "../components/common/Loader";
+import PageHeader from "../components/common/PageHeader";
+import SearchInput from "../components/common/SearchInput";
+import SegmentedFilter from "../components/common/SegmentedFilter";
+import ErrorBanner from "../components/common/ErrorBanner";
+import TableSkeleton from "../components/common/TableSkeleton";
+import { DownloadIcon, PlusIcon } from "../components/common/Icon";
 
 const BannersPage = () => {
   const dispatch = useDispatch();
   const { banners, loading, error } = useSelector((state) => state.banners);
 
-  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editData, setEditData] = useState(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(null);
 
-  // Page mount par banners fetch karo
   useEffect(() => {
     dispatch(fetchBanners());
   }, [dispatch]);
 
-  // Handlers
+  const activeCount = banners.filter((b) => b.isActive).length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return banners.filter((b) => {
+      if (status === "active" && !b.isActive) return false;
+      if (status === "inactive" && b.isActive) return false;
+      if (!q) return true;
+      return (
+        String(b.title || "").toLowerCase().includes(q) ||
+        String(b.subtitle || "").toLowerCase().includes(q) ||
+        String(b.linkUrl || "").toLowerCase().includes(q)
+      );
+    });
+  }, [banners, search, status]);
+
   const handleOpenAdd = () => {
     setEditData(null);
     setIsModalOpen(true);
@@ -36,54 +57,80 @@ const BannersPage = () => {
     setEditData(null);
   };
 
-  return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Banners</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Manage your store's hero banners and promotional images.
-          </p>
-        </div>
+  const handleExportAll = () => {
+    if (!banners.length) {
+      dispatch(toastInfo("Nothing to export", "Add a banner first."));
+      return;
+    }
+    exportAllBannersToExcel(banners);
+  };
 
-        {/* Add New Button */}
-        <button
-          onClick={handleOpenAdd}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2 self-start sm:self-auto shadow-sm shadow-indigo-200"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Add Banner
-        </button>
+  return (
+    <div className="page-shell">
+      <PageHeader
+        title="Banners"
+        subtitle="Hero images and promo slots shown on the storefront home page."
+        meta={
+          <>
+            <span className="meta-chip">
+              <b>{banners.length}</b> total
+            </span>
+            <span className="meta-chip meta-chip-success">
+              <b>{activeCount}</b> live
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <button
+              onClick={handleExportAll}
+              title="Download all banners as Excel"
+              className="btn btn-export"
+            >
+              <DownloadIcon className="w-4 h-4" />
+              Export
+            </button>
+            <button onClick={handleOpenAdd} className="btn btn-primary">
+              <PlusIcon className="w-4 h-4" />
+              Add banner
+            </button>
+          </>
+        }
+      />
+
+      <div className="admin-toolbar mb-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search title, subtitle or link…"
+        />
+        <SegmentedFilter
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: null, label: "All", count: banners.length },
+            { value: "active", label: "Active", count: activeCount },
+            {
+              value: "inactive",
+              label: "Inactive",
+              count: banners.length - activeCount,
+            },
+          ]}
+        />
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onRetry={() => dispatch(fetchBanners())} />
 
-      {/* Main Content Area */}
-      {loading ? (
-        <Loader />
+      {loading && banners.length === 0 ? (
+        <TableSkeleton rows={5} columns={5} hasThumb />
       ) : (
-        <BannerTable banners={banners} onEdit={handleOpenEdit} />
+        <BannerTable
+          banners={filtered}
+          onEdit={handleOpenEdit}
+          onCreate={handleOpenAdd}
+        />
       )}
 
-      {/* Modal Component */}
       <BannerModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}

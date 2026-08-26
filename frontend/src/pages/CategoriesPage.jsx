@@ -1,24 +1,54 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCategories } from "../features/categories/categoriesSlice";
 import { exportAllCategoriesToExcel } from "../utils/exportProductToExcel";
+import { toastInfo } from "../features/ui/uiSlice";
 
 import CategoryTable from "../components/categories/CategoryTable";
 import CategoryModal from "../components/categories/CategoryModal";
-import Loader from "../components/common/Loader";
+import PageHeader from "../components/common/PageHeader";
+import SearchInput from "../components/common/SearchInput";
+import SegmentedFilter from "../components/common/SegmentedFilter";
+import ErrorBanner from "../components/common/ErrorBanner";
+import TableSkeleton from "../components/common/TableSkeleton";
+import { DownloadIcon, PlusIcon } from "../components/common/Icon";
 
 const CategoriesPage = () => {
   const dispatch = useDispatch();
-  const { categories, loading, deleteLoading } = useSelector(
+  const { categories, loading, error, deleteLoading } = useSelector(
     (state) => state.categories,
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editData, setEditData] = useState(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(null);
 
   useEffect(() => {
     dispatch(fetchCategories());
   }, [dispatch]);
+
+  const activeCount = categories.filter((c) => c.isActive).length;
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return categories.filter((c) => {
+      if (status === "active" && !c.isActive) return false;
+      if (status === "inactive" && c.isActive) return false;
+      if (!q) return true;
+      return (
+        String(c.name || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(c.slug || "")
+          .toLowerCase()
+          .includes(q) ||
+        String(c.description || "")
+          .toLowerCase()
+          .includes(q)
+      );
+    });
+  }, [categories, search, status]);
 
   const handleOpenAdd = () => {
     setEditData(null);
@@ -37,61 +67,90 @@ const CategoriesPage = () => {
 
   const handleExportAll = () => {
     if (!categories.length) {
-      alert("No categories available to export.");
+      dispatch(toastInfo("Nothing to export", "Add a category first."));
       return;
     }
     exportAllCategoriesToExcel(categories);
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Categories</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Organize your products by creating and managing categories.
-          </p>
-        </div>
+    <div className="page-shell">
+      <PageHeader
+        title="Categories"
+        subtitle="Group your catalog so shoppers can browse by collection."
+        meta={
+          <>
+            <span className="meta-chip">
+              <b>{categories.length}</b> total
+            </span>
+            <span className="meta-chip meta-chip-success">
+              <b>{activeCount}</b> active
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <button
+              onClick={handleExportAll}
+              title="Download all categories as Excel"
+              className="btn btn-export"
+            >
+              <DownloadIcon className="w-4 h-4" />
+              Export
+            </button>
+            <button onClick={handleOpenAdd} className="btn btn-primary">
+              <PlusIcon className="w-4 h-4" />
+              Add category
+            </button>
+          </>
+        }
+      />
 
-        <div className="flex items-center gap-3 self-start sm:self-auto">
-          <button
-            onClick={handleExportAll}
-            title="Download all categories as Excel"
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2 shadow-sm shadow-emerald-200"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Export Excel
-          </button>
-
-          <button
-            onClick={handleOpenAdd}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2 shadow-sm shadow-indigo-200"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Category
-          </button>
-        </div>
+      <div className="admin-toolbar mb-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search name, slug or description…"
+        />
+        <SegmentedFilter
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: null, label: "All", count: categories.length },
+            { value: "active", label: "Active", count: activeCount },
+            {
+              value: "inactive",
+              label: "Inactive",
+              count: categories.length - activeCount,
+            },
+          ]}
+        />
       </div>
 
-      {/* Delete Loading Indicator */}
+      <ErrorBanner
+        message={error}
+        onRetry={() => dispatch(fetchCategories())}
+      />
+
       {deleteLoading && (
-        <div className="bg-yellow-50 text-yellow-700 px-4 py-3 rounded-xl text-sm animate-pulse border border-yellow-200">
-          Deleting category and its associated products... Please wait.
+        <div className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-(--radius) bg-amber-50 border border-amber-200">
+          <span className="spinner spinner-sm" />
+          <p className="text-[12.5px] text-amber-800">
+            Deleting the category and its products — this can take a moment.
+          </p>
         </div>
       )}
 
-      {/* Main Content Area */}
-      {loading ? (
-        <Loader />
+      {loading && categories.length === 0 ? (
+        <TableSkeleton rows={6} columns={5} hasThumb />
       ) : (
-        <CategoryTable categories={categories} onEdit={handleOpenEdit} />
+        <CategoryTable
+          categories={filtered}
+          onEdit={handleOpenEdit}
+          onCreate={handleOpenAdd}
+        />
       )}
 
-      {/* Modal Component (Hidden by default) */}
       <CategoryModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}

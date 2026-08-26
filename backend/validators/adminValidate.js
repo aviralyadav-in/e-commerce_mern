@@ -3,8 +3,7 @@ import { z } from "zod";
 export const adminValidationSchema = z.object({
   name: z
     .string({
-      required_error: "Admin name is required",
-      invalid_type_error: "Admin name must be a string",
+      error: "Admin name is required",
     })
     .trim()
     // Zod me string default taur par empty ("") ho sakti hai,
@@ -13,7 +12,7 @@ export const adminValidationSchema = z.object({
 
   email: z
     .string({
-      required_error: "Admin email is required",
+      error: "Admin email is required",
     })
     .trim()
     .toLowerCase()
@@ -21,7 +20,7 @@ export const adminValidationSchema = z.object({
 
   password: z
     .string({
-      required_error: "Admin password is required",
+      error: "Admin password is required",
     })
     .min(1, "Admin password is required"),
 

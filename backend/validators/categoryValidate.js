@@ -3,8 +3,7 @@ import { z } from "zod";
 export const categoryValidationSchema = z.object({
   name: z
     .string({
-      required_error: "Category name is required",
-      invalid_type_error: "Category name must be a string",
+      error: "Category name is required",
     })
     .trim()
     .min(2, "Category name must be at least 2 characters")
@@ -12,7 +11,7 @@ export const categoryValidationSchema = z.object({
 
   slug: z
     .string({
-      required_error: "Slug is required",
+      error: "Slug is required",
     })
     .trim()
     .toLowerCase()
@@ -28,15 +27,17 @@ export const categoryValidationSchema = z.object({
   image: z.string().optional().default(""),
 
   subCategories: z
-    .array(z.enum(["Men", "Women"], {
-      errorMap: () => ({ message: "Sub-category must be Men or Women" }),
-    }))
+    .array(
+      z.enum(["Men", "Women"], {
+        error: "Sub-category must be Men or Women",
+      }),
+    )
     .min(1, "Select at least one sub-category (Men or Women)")
     .default(["Men", "Women"]),
 
   isActive: z
     .boolean({
-      invalid_type_error: "isActive must be a boolean",
+      error: "isActive must be a boolean",
     })
     .optional()
     .default(true),

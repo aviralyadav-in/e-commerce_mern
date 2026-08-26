@@ -1,28 +1,39 @@
 import React, { useState } from "react";
-import { Outlet } from "react-router";
+import { Outlet, useLocation } from "react-router";
 import Sidebar from "./Sidebar";
 import Navbar from "./Navbar";
+import CommandPalette from "./CommandPalette";
+import Toaster from "../common/Toaster";
 
 const Layout = () => {
-  // Mobile sidebar toggle state
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const location = useLocation();
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden font-sans">
-      {/* Sidebar Component */}
-      <Sidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
+    <div className="flex h-screen overflow-hidden bg-(--surface)">
+      <Sidebar
+        isOpen={isSidebarOpen}
+        setIsOpen={setIsSidebarOpen}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((c) => !c)}
+      />
 
-      {/* Main Content Area (Right Side) */}
-      <div className="flex-1 flex flex-col overflow-hidden w-full">
-        {/* Navbar Component */}
+      <div className="flex-1 flex flex-col overflow-hidden w-full min-w-0">
         <Navbar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
-        {/* Dynamic Page Content Area */}
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50 p-4 sm:p-6">
-          {/* Outlet wahan page render karega jahan aap react-router me navigate karenge */}
-          <Outlet />
+        <main
+          key={location.pathname}
+          className="flex-1 overflow-x-hidden overflow-y-auto admin-scroll p-4 sm:p-5 lg:p-6"
+        >
+          <div className="page-shell max-w-330 mx-auto w-full">
+            <Outlet />
+          </div>
         </main>
       </div>
+
+      <CommandPalette />
+      <Toaster />
     </div>
   );
 };

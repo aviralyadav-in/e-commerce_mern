@@ -1,26 +1,52 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCoupons } from "../features/coupons/couponsSlice";
+import { exportAllCouponsToExcel } from "../utils/exportProductToExcel";
+import { toastInfo } from "../features/ui/uiSlice";
 
-// Components
-import CouponTable from "../components/coupons/CouponTable";
+import CouponTable, { couponState } from "../components/coupons/CouponTable";
 import CouponModal from "../components/coupons/CouponModal";
-import Loader from "../components/common/Loader";
+import PageHeader from "../components/common/PageHeader";
+import SearchInput from "../components/common/SearchInput";
+import SegmentedFilter from "../components/common/SegmentedFilter";
+import ErrorBanner from "../components/common/ErrorBanner";
+import TableSkeleton from "../components/common/TableSkeleton";
+import { DownloadIcon, PlusIcon } from "../components/common/Icon";
 
 const CouponsPage = () => {
   const dispatch = useDispatch();
   const { coupons, loading, error } = useSelector((state) => state.coupons);
 
-  // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editData, setEditData] = useState(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState(null);
 
-  // Page mount par coupons fetch karo
   useEffect(() => {
     dispatch(fetchCoupons());
   }, [dispatch]);
 
-  // Handlers
+  const counts = useMemo(
+    () =>
+      coupons.reduce(
+        (acc, c) => {
+          acc[couponState(c)] += 1;
+          return acc;
+        },
+        { active: 0, paused: 0, expired: 0 },
+      ),
+    [coupons],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return coupons.filter((c) => {
+      if (status && couponState(c) !== status) return false;
+      if (!q) return true;
+      return String(c.code || "").toLowerCase().includes(q);
+    });
+  }, [coupons, search, status]);
+
   const handleOpenAdd = () => {
     setEditData(null);
     setIsModalOpen(true);
@@ -36,70 +62,80 @@ const CouponsPage = () => {
     setEditData(null);
   };
 
-  // Stats
-  const activeCoupons = coupons.filter(
-    (c) => c.isActive && new Date(c.expiryDate) >= new Date(),
-  ).length;
+  const handleExportAll = () => {
+    if (!coupons.length) {
+      dispatch(toastInfo("Nothing to export", "Create a coupon first."));
+      return;
+    }
+    exportAllCouponsToExcel(coupons);
+  };
 
   return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Coupons</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Create and manage discount coupons for your customers.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3 self-start sm:self-auto">
-          {/* Active Coupons Badge */}
-          <div className="bg-green-50 border border-green-100 px-4 py-2 rounded-xl flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-green-500"></span>
-            <span className="text-sm font-medium text-green-800">
-              Active:
+    <div className="page-shell">
+      <PageHeader
+        title="Coupons"
+        subtitle="Discount codes customers can apply at checkout."
+        meta={
+          <>
+            <span className="meta-chip meta-chip-success">
+              <b>{counts.active}</b> active
             </span>
-            <span className="font-bold text-green-900">{activeCoupons}</span>
-          </div>
-
-          {/* Add New Button */}
-          <button
-            onClick={handleOpenAdd}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-medium transition-colors flex items-center gap-2 shadow-sm shadow-indigo-200"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+            <span className="meta-chip">
+              <b>{counts.paused}</b> paused
+            </span>
+            <span className="meta-chip meta-chip-danger">
+              <b>{counts.expired}</b> expired
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <button
+              onClick={handleExportAll}
+              title="Download all coupons as Excel"
+              className="btn btn-export"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            Add Coupon
-          </button>
-        </div>
+              <DownloadIcon className="w-4 h-4" />
+              Export
+            </button>
+            <button onClick={handleOpenAdd} className="btn btn-primary">
+              <PlusIcon className="w-4 h-4" />
+              Add coupon
+            </button>
+          </>
+        }
+      />
+
+      <div className="admin-toolbar mb-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search by coupon code…"
+        />
+        <SegmentedFilter
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: null, label: "All", count: coupons.length },
+            { value: "active", label: "Active", count: counts.active },
+            { value: "paused", label: "Paused", count: counts.paused },
+            { value: "expired", label: "Expired", count: counts.expired },
+          ]}
+        />
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onRetry={() => dispatch(fetchCoupons())} />
 
-      {/* Main Content Area */}
-      {loading ? (
-        <Loader />
+      {loading && coupons.length === 0 ? (
+        <TableSkeleton rows={6} columns={6} />
       ) : (
-        <CouponTable coupons={coupons} onEdit={handleOpenEdit} />
+        <CouponTable
+          coupons={filtered}
+          onEdit={handleOpenEdit}
+          onCreate={handleOpenAdd}
+        />
       )}
 
-      {/* Modal Component */}
       <CouponModal
         isOpen={isModalOpen}
         onClose={handleCloseModal}

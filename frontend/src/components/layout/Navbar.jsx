@@ -1,153 +1,150 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
+import { setPaletteOpen } from "../../features/ui/uiSlice";
 import { logoutAdmin } from "../../features/auth/authSlice";
 import ConfirmDialog from "../common/ConfirmDialog";
+import { initials } from "../../utils/format";
+import {
+  MenuIcon,
+  SearchIcon,
+  ChevronDownIcon,
+  UserIcon,
+  LogoutIcon,
+} from "../common/Icon";
 
-// Har route ka title define kiya hai
-const pageTitles = {
-  "/dashboard": "Dashboard",
-  "/users": "Users Management",
-  "/categories": "Categories Management",
-  "/products": "Products Management",
-  "/orders": "Orders Management",
-  "/banners": "Banners Management",
-  "/coupons": "Coupons Management",
+const pageMeta = {
+  "/dashboard": { title: "Dashboard", crumb: "Overview" },
+  "/users": { title: "Customers", crumb: "Customers" },
+  "/categories": { title: "Categories", crumb: "Catalog" },
+  "/products": { title: "Products", crumb: "Catalog" },
+  "/orders": { title: "Orders", crumb: "Sales" },
+  "/banners": { title: "Banners", crumb: "Catalog" },
+  "/coupons": { title: "Coupons", crumb: "Sales" },
+  "/wishlists": { title: "Wishlists", crumb: "Customers" },
+  "/carts": { title: "Carts", crumb: "Customers" },
+  "/reviews": { title: "Reviews", crumb: "Sales" },
 };
 
 const Navbar = ({ isOpen, setIsOpen }) => {
   const location = useLocation();
-  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const { admin } = useSelector((state) => state.auth);
+  const meta = pageMeta[location.pathname] || pageMeta["/dashboard"];
+
+  const [menuOpen, setMenuOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const menuRef = useRef(null);
 
-  // Current page ka title nikalo
-  const currentTitle = pageTitles[location.pathname] || "Dashboard";
-
-  const handleLogout = () => {
-    setShowLogoutConfirm(true);
-  };
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onClick = (e) => {
+      if (menuRef.current && !menuRef.current.contains(e.target))
+        setMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [menuOpen]);
 
   const confirmLogout = () => {
+    setLoggingOut(true);
     dispatch(logoutAdmin()).finally(() => {
+      setLoggingOut(false);
       setShowLogoutConfirm(false);
       navigate("/login");
     });
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between sticky top-0 z-10 shadow-sm">
-      {/* Left Side - Hamburger + Page Title */}
-      <div className="flex items-center gap-4">
-        {/* Hamburger Button - Sirf Mobile Me Dikhega */}
+    <header className="topbar sticky top-0 z-10">
+      <div className="flex items-center gap-2.5 min-w-0">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="lg:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+          className="lg:hidden icon-btn icon-btn-ghost"
+          aria-label="Toggle menu"
         >
-          {/* Hamburger Icon */}
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M4 6h16M4 12h16M4 18h16"
-            />
-          </svg>
+          <MenuIcon className="w-4.5 h-4.5" />
         </button>
 
-        {/* Page Title */}
-        <div>
-          <h2 className="text-lg font-bold text-gray-800">{currentTitle}</h2>
-          <p className="text-xs text-gray-400 hidden sm:block">
-            Welcome back, {admin?.name || "Admin"} 👋
-          </p>
-        </div>
+        <nav className="crumb" aria-label="Breadcrumb">
+          <span className="hidden sm:inline">{meta.crumb}</span>
+          <span className="hidden sm:inline text-(--border-strong)">/</span>
+          <span className="crumb-current">{meta.title}</span>
+        </nav>
       </div>
 
-      {/* Right Side - Notification + Admin Info */}
-      <div className="flex items-center gap-3">
-        {/* Notification Bell */}
-        <button className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors">
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-            />
-          </svg>
-          {/* Notification Badge */}
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-        </button>
-
-        {/* Divider */}
-        <div className="w-px h-8 bg-gray-200 hidden sm:block"></div>
-
-        {/* Admin Info + Avatar */}
-        <div className="hidden sm:flex items-center gap-3">
-          <div className="text-right">
-            <p className="text-sm font-semibold text-gray-800 leading-tight">
-              {admin?.name || "Admin"}
-            </p>
-            <p className="text-xs text-gray-400">{admin?.email || ""}</p>
-          </div>
-          {/* Avatar */}
-          <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center cursor-pointer">
-            <span className="text-white font-bold text-sm">
-              {admin?.name?.charAt(0).toUpperCase() || "A"}
-            </span>
-          </div>
-        </div>
-
-        {/* Mobile Me Sirf Avatar Dikhega */}
-        <div className="sm:hidden">
-          <div className="w-9 h-9 rounded-full bg-indigo-600 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">
-              {admin?.name?.charAt(0).toUpperCase() || "A"}
-            </span>
-          </div>
-        </div>
-
-        {/* Logout Button - Sirf Desktop Me */}
+      <div className="flex items-center gap-2">
         <button
-          onClick={handleLogout}
-          className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600 transition-colors"
+          onClick={() => dispatch(setPaletteOpen(true))}
+          className="topbar-search"
+          aria-label="Search pages"
         >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
-          </svg>
-          Logout
+          <SearchIcon className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Search…</span>
+          <span className="hidden sm:flex items-center gap-0.5 ml-auto">
+            <span className="kbd">Ctrl</span>
+            <span className="kbd">K</span>
+          </span>
         </button>
+
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((o) => !o)}
+            className="flex items-center gap-2 pl-1 pr-1.5 py-1 rounded-(--radius) hover:bg-(--surface-sunken) transition-colors"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+          >
+            <div className="avatar w-7 h-7 text-[11px]">
+              {initials(admin?.name) || "A"}
+            </div>
+            <div className="hidden md:block text-left leading-tight pr-0.5">
+              <p className="text-[12px] font-semibold text-(--ink)">
+                {admin?.name || "Admin"}
+              </p>
+              <p className="text-[10px] text-(--ink-faint)">Super Admin</p>
+            </div>
+            <ChevronDownIcon className="hidden md:block w-3.5 h-3.5 text-(--ink-faint)" />
+          </button>
+
+          {menuOpen && (
+            <div className="menu-pop" role="menu">
+              <div className="px-2.5 py-2 border-b border-(--border) mb-1">
+                <p className="text-[12.5px] font-semibold text-(--ink) truncate">
+                  {admin?.name || "Admin"}
+                </p>
+                <p className="text-[11px] text-(--ink-muted) truncate">
+                  {admin?.email || "admin@bagstore.com"}
+                </p>
+              </div>
+              <div className="menu-item" role="menuitem">
+                <UserIcon className="w-4 h-4 text-(--ink-faint)" />
+                <span>Signed in as Super Admin</span>
+              </div>
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setShowLogoutConfirm(true);
+                }}
+                className="menu-item menu-item-danger"
+                role="menuitem"
+              >
+                <LogoutIcon className="w-4 h-4" />
+                <span>Log out</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <ConfirmDialog
         isOpen={showLogoutConfirm}
         title="Log out?"
-        message="Are you sure you want to log out? You will need to sign in again to access the admin panel."
+        message="You will need to sign in again to access the admin panel."
         confirmLabel="Log out"
-        cancelLabel="Stay signed in"
         variant="danger"
+        busy={loggingOut}
         onConfirm={confirmLogout}
         onCancel={() => setShowLogoutConfirm(false)}
       />

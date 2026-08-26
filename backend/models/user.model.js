@@ -45,10 +45,10 @@ const userSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: {
-        values: ["male", "female", "other", "prefer_not_to_say"],
+        values: ["male", "female"],
         message: "Invalid gender value",
       },
-      default: "prefer_not_to_say",
+      default: "male",
     },
     dateOfBirth: {
       type: Date,

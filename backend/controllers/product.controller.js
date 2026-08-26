@@ -69,6 +69,12 @@ export const createProduct = async (req, res) => {
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
+    // Collection flags — FormData se "true"/"false" string aata hai
+    ["isFeatured", "isBestSeller", "isNewArrival"].forEach((key) => {
+      if (req.body[key] !== undefined)
+        req.body[key] = req.body[key] === "true" || req.body[key] === true;
+    });
+
     // 2. Images extract karna
     req.body.images = extractImages(req);
 
@@ -141,6 +147,10 @@ export const getProducts = async (req, res) => {
       sort = "createdAt",
       order = "desc",
       categoryId,
+      subCategory,
+      collection,
+      onSale,
+      isActive,
       minPrice,
       maxPrice,
       search,
@@ -148,9 +158,45 @@ export const getProducts = async (req, res) => {
 
     const skip = (Number(page) - 1) * Number(limit);
     const filter = {};
+    const andConditions = [];
 
-    // Use categoryId based on schema
-    if (categoryId) filter.categoryId = categoryId;
+    // Multiple category support — comma-separated IDs
+    if (categoryId) {
+      const ids = String(categoryId)
+        .split(",")
+        .map((id) => id.trim())
+        .filter(Boolean);
+      filter.categoryId = ids.length > 1 ? { $in: ids } : ids[0];
+    }
+
+    // Gender filter — comma-separated (Men, Women)
+    if (subCategory) {
+      filter.subCategory = { $in: String(subCategory).split(",").filter(Boolean) };
+    }
+
+    // Collection tags — featured / best / new (comma-separated)
+    if (collection) {
+      const tags = String(collection).split(",").map((t) => t.trim());
+      const tagConditions = [];
+      if (tags.includes("featured")) tagConditions.push({ isFeatured: true });
+      if (tags.includes("best")) tagConditions.push({ isBestSeller: true });
+      if (tags.includes("new")) tagConditions.push({ isNewArrival: true });
+      if (tagConditions.length) andConditions.push({ $or: tagConditions });
+    }
+
+    // Sale — sirf discounted products (discountPrice < price)
+    if (onSale === "true") {
+      filter.$expr = {
+        $and: [
+          { $ne: ["$discountPrice", null] },
+          { $gt: ["$discountPrice", 0] },
+          { $lt: ["$discountPrice", "$price"] },
+        ],
+      };
+    }
+
+    // Storefront ke liye sirf active products
+    if (isActive === "true") filter.isActive = true;
 
     if (minPrice !== undefined || maxPrice !== undefined) {
       filter.price = {};
@@ -159,11 +205,16 @@ export const getProducts = async (req, res) => {
     }
 
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: "i" } },
-        { description: { $regex: search, $options: "i" } },
-      ];
+      andConditions.push({
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { description: { $regex: search, $options: "i" } },
+        ],
+      });
     }
+
+    // Search $or aur collection $or ko merge karne ke liye $and use karo
+    if (andConditions.length) filter.$and = andConditions;
 
     const sortOptions = { [sort]: order === "asc" ? 1 : -1 };
 
@@ -249,6 +300,12 @@ export const updateProduct = async (req, res) => {
     if (req.body.stock) req.body.stock = Number(req.body.stock);
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
+
+    // Collection flags — FormData se "true"/"false" string aata hai
+    ["isFeatured", "isBestSeller", "isNewArrival"].forEach((key) => {
+      if (req.body[key] !== undefined)
+        req.body[key] = req.body[key] === "true" || req.body[key] === true;
+    });
 
     // 2. Extract new images
     const newImages = extractImages(req);

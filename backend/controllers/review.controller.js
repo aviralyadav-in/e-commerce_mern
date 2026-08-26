@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import { Review } from "../models/review.model.js"; // Aapke path ke hisab se
+import { Review } from "../models/review.model.js";
 import { Product } from "../models/product.model.js";
 import { reviewValidationSchema } from "../validators/reviewValidate.js";
 
@@ -98,6 +98,57 @@ export const createReview = async (req, res) => {
         .json({ message: "You have already reviewed this product" });
     }
 
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   ADMIN: GET ALL REVIEWS
+========================================================= */
+export const getAllReviews = async (req, res) => {
+  try {
+    const reviews = await Review.find()
+      .populate("user", "name email avatar")
+      .populate("product", "name images price")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      message: "All reviews fetched successfully",
+      count: reviews.length,
+      reviews,
+    });
+  } catch (error) {
+    console.error("Get All Reviews Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   ADMIN: DELETE REVIEW
+========================================================= */
+export const deleteReviewAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid Review ID" });
+    }
+
+    const review = await Review.findById(id);
+
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    const productId = review.product;
+    await Review.findByIdAndDelete(id);
+    await updateProductRating(productId);
+
+    return res.status(200).json({
+      message: "Review deleted successfully",
+    });
+  } catch (error) {
+    console.error("Admin Delete Review Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

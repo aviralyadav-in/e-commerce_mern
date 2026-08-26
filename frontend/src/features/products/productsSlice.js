@@ -1,27 +1,38 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import API from "../../api/axios";
 
-// 1. Fetch All Products (Dashboard ke liye)
+const buildProductQuery = (params = {}) => {
+  const query = new URLSearchParams();
+  query.set("limit", String(params.limit ?? 100));
+  query.set("page", String(params.page ?? 1));
+  if (params.categoryId) query.set("categoryId", params.categoryId);
+  if (params.search) query.set("search", params.search);
+  return query.toString();
+};
+
+// 1. Fetch All Products
 export const fetchProducts = createAsyncThunk(
   "products/fetchAll",
-  async (_, { rejectWithValue }) => {
+  async (params = {}, { rejectWithValue }) => {
     try {
-      const response = await API.get("/products");
+      const qs = buildProductQuery(params);
+      const response = await API.get(`/products?${qs}`);
       return response.data.products || [];
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Error fetching products");
+      return rejectWithValue(
+        error.response?.data?.message || "Error fetching products",
+      );
     }
   },
 );
 
-// 2. Fetch Products By Category (Products Page ke liye)
-// Jab admin koi category select karega toh us category ke
-// products fetch honge
+// 2. Fetch Products By Category
 export const fetchProductsByCategory = createAsyncThunk(
   "products/fetchByCategory",
   async (categoryId, { rejectWithValue }) => {
     try {
-      const response = await API.get(`/products?categoryId=${categoryId}`);
+      const qs = buildProductQuery({ categoryId, limit: 100 });
+      const response = await API.get(`/products?${qs}`);
       return response.data.products || [];
     } catch (error) {
       return rejectWithValue(
@@ -31,41 +42,38 @@ export const fetchProductsByCategory = createAsyncThunk(
   },
 );
 
-// 3. Add Product (Category ke andar)
-// Jab product add hoga toh categoryId automatically
-// selected category ki jayegi
 export const addProduct = createAsyncThunk(
   "products/add",
   async (productData, { rejectWithValue }) => {
     try {
-      // productData is FormData
       const response = await API.post("/products/admin", productData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       return response.data.product;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Error adding product");
+      return rejectWithValue(
+        error.response?.data?.message || "Error adding product",
+      );
     }
   },
 );
 
-// 4. Update Product
 export const updateProduct = createAsyncThunk(
   "products/update",
   async ({ id, data }, { rejectWithValue }) => {
     try {
-      // data is FormData
       const response = await API.put(`/products/admin/${id}`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       return response.data.product;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Error updating product");
+      return rejectWithValue(
+        error.response?.data?.message || "Error updating product",
+      );
     }
   },
 );
 
-// 5. Delete Product
 export const deleteProduct = createAsyncThunk(
   "products/delete",
   async (id, { rejectWithValue }) => {
@@ -73,7 +81,9 @@ export const deleteProduct = createAsyncThunk(
       await API.delete(`/products/admin/${id}`);
       return id;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || "Error deleting product");
+      return rejectWithValue(
+        error.response?.data?.message || "Error deleting product",
+      );
     }
   },
 );
@@ -82,15 +92,14 @@ const productsSlice = createSlice({
   name: "products",
   initialState: {
     products: [],
-    selectedCategoryId: null, // Selected category track karega
+    selectedCategoryId: null,
     loading: false,
     error: null,
   },
   reducers: {
-    // Jab admin category dropdown se category change kare
     setSelectedCategory: (state, action) => {
       state.selectedCategoryId = action.payload;
-      state.products = []; // Purane products clear karo
+      state.products = [];
     },
     clearProducts: (state) => {
       state.products = [];
@@ -99,7 +108,6 @@ const productsSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Fetch All Products
       .addCase(fetchProducts.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -112,8 +120,6 @@ const productsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-
-      // Fetch Products By Category
       .addCase(fetchProductsByCategory.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -126,8 +132,6 @@ const productsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-
-      // Add Product
       .addCase(addProduct.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -140,8 +144,6 @@ const productsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-
-      // Update Product
       .addCase(updateProduct.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -159,8 +161,6 @@ const productsSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-
-      // Delete Product
       .addCase(deleteProduct.pending, (state) => {
         state.loading = true;
         state.error = null;

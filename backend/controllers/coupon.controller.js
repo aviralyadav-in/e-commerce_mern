@@ -6,11 +6,11 @@ import { couponValidationSchema } from "../validators/couponValidate.js";
 // User request schema for applying coupon
 const applyCouponSchema = z.object({
   code: z
-    .string({ required_error: "Coupon code is required" })
+    .string({ error: "Coupon code is required" })
     .trim()
     .toUpperCase(),
   orderTotal: z
-    .number({ required_error: "Order total is required" })
+    .number({ error: "Order total is required and must be a number" })
     .min(0, "Order total cannot be negative"),
 });
 

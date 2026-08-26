@@ -1,53 +1,113 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllCarts } from "../features/adminCart/adminCartSlice";
+import { exportAllCartsToExcel } from "../utils/exportProductToExcel";
+import { toastInfo } from "../features/ui/uiSlice";
 
-// Components
 import AdminCartTable from "../components/adminCart/AdminCartTable";
-import Loader from "../components/common/Loader";
+import PageHeader from "../components/common/PageHeader";
+import SearchInput from "../components/common/SearchInput";
+import ErrorBanner from "../components/common/ErrorBanner";
+import TableSkeleton from "../components/common/TableSkeleton";
+import { formatCurrency } from "../utils/format";
+import { DownloadIcon, RefreshIcon } from "../components/common/Icon";
 
 const AdminCartPage = () => {
   const dispatch = useDispatch();
   const { carts, totalEntries, loading, error } = useSelector(
     (state) => state.adminCart,
   );
+  const [search, setSearch] = useState("");
 
-  // Page load hone par carts fetch karo
   useEffect(() => {
     dispatch(fetchAllCarts());
   }, [dispatch]);
 
-  return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">User Carts</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            View all products added to cart by customers on your store.
-          </p>
-        </div>
+  /** Value sitting in carts right now, and how many customers it belongs to. */
+  const insights = useMemo(() => {
+    const customers = new Set();
+    let value = 0;
+    carts.forEach((c) => {
+      if (c.userEmail || c.userName) customers.add(c.userEmail || c.userName);
+      value += Number(c.itemTotal) || 0;
+    });
+    return { customers: customers.size, value };
+  }, [carts]);
 
-        {/* Total Entries Badge */}
-        <div className="bg-emerald-50 border border-emerald-100 px-4 py-2 rounded-lg flex items-center gap-2 self-start sm:self-auto">
-          <span className="text-sm font-medium text-emerald-800">
-            Total Entries:
-          </span>
-          <span className="bg-emerald-600 text-white text-xs font-bold px-2 py-1 rounded-md">
-            {totalEntries}
-          </span>
-        </div>
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return carts;
+    return carts.filter(
+      (item) =>
+        String(item.userName || "").toLowerCase().includes(q) ||
+        String(item.userEmail || "").toLowerCase().includes(q) ||
+        String(item.productName || "").toLowerCase().includes(q),
+    );
+  }, [carts, search]);
+
+  const handleExportAll = () => {
+    if (!carts.length) {
+      dispatch(toastInfo("Nothing to export", "No active carts right now."));
+      return;
+    }
+    exportAllCartsToExcel(carts);
+  };
+
+  return (
+    <div className="page-shell">
+      <PageHeader
+        title="Customer carts"
+        subtitle="Items sitting in carts but not yet checked out — your abandoned-cart pipeline."
+        meta={
+          <>
+            <span className="meta-chip meta-chip-success">
+              <b>{formatCurrency(insights.value)}</b> in carts
+            </span>
+            <span className="meta-chip">
+              <b>{totalEntries ?? carts.length}</b> cart items
+            </span>
+            <span className="meta-chip meta-chip-info">
+              <b>{insights.customers}</b> customers
+            </span>
+          </>
+        }
+        actions={
+          <>
+            <button
+              onClick={() => dispatch(fetchAllCarts())}
+              className="btn btn-secondary"
+              title="Refresh"
+            >
+              <RefreshIcon className="w-4 h-4" />
+              Refresh
+            </button>
+            <button
+              onClick={handleExportAll}
+              title="Download all carts as Excel"
+              className="btn btn-export"
+            >
+              <DownloadIcon className="w-4 h-4" />
+              Export
+            </button>
+          </>
+        }
+      />
+
+      <div className="admin-toolbar mb-3">
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder="Search by customer or product…"
+        />
       </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm">
-          {error}
-        </div>
-      )}
+      <ErrorBanner message={error} onRetry={() => dispatch(fetchAllCarts())} />
 
-      {/* Content Area */}
-      {loading ? <Loader /> : <AdminCartTable carts={carts} />}
+      {loading && carts.length === 0 ? (
+        <TableSkeleton rows={6} columns={6} hasThumb />
+      ) : (
+        <AdminCartTable carts={filtered} />
+      )}
     </div>
   );
 };

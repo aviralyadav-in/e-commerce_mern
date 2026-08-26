@@ -8,6 +8,9 @@ import bannersReducer from "../features/banners/bannersSlice";
 import couponsReducer from "../features/coupons/couponsSlice";
 import wishlistReducer from "../features/wishlist/wishlistSlice";
 import adminCartReducer from "../features/adminCart/adminCartSlice";
+import reviewsReducer from "../features/reviews/reviewsSlice";
+import uiReducer from "../features/ui/uiSlice";
+import toastMiddleware from "./toastMiddleware";
 
 export const store = configureStore({
   reducer: {
@@ -20,8 +23,10 @@ export const store = configureStore({
     coupons: couponsReducer,
     wishlist: wishlistReducer,
     adminCart: adminCartReducer,
+    reviews: reviewsReducer,
+    ui: uiReducer,
   },
+  middleware: (getDefault) => getDefault().concat(toastMiddleware),
 });
 
 export default store;
-
