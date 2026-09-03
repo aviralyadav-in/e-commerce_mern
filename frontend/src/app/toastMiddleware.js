@@ -1,4 +1,5 @@
-import { pushToast } from "../features/ui/uiSlice";
+import toast from "react-hot-toast";
+import { renderToastBody } from "../lib/toast";
 
 /**
  * Turns every mutating thunk into a toast, centrally.
@@ -52,7 +53,7 @@ const FAILURE_LABELS = {
   "reviews/delete": "Could not delete review",
 };
 
-const toastMiddleware = (store) => (next) => (action) => {
+const toastMiddleware = () => (next) => (action) => {
   const result = next(action);
   const type = action?.type;
   if (typeof type !== "string") return result;
@@ -60,7 +61,7 @@ const toastMiddleware = (store) => (next) => (action) => {
   if (type.endsWith("/fulfilled")) {
     const key = type.slice(0, -"/fulfilled".length);
     const title = SUCCESS_LABELS[key];
-    if (title) store.dispatch(pushToast({ type: "success", title }));
+    if (title) toast.success(title);
   } else if (type.endsWith("/rejected")) {
     const key = type.slice(0, -"/rejected".length);
     const title = FAILURE_LABELS[key];
@@ -70,9 +71,8 @@ const toastMiddleware = (store) => (next) => (action) => {
         typeof action.payload === "string"
           ? action.payload
           : action.error?.message || "";
-      store.dispatch({
-        type: pushToast.type,
-        payload: { type: "error", title, message, duration: 5000 },
+      toast.error(message ? renderToastBody(title, message) : title, {
+        duration: 5000,
       });
     }
   }

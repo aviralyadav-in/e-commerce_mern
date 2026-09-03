@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   updateOrderStatus,
@@ -16,14 +16,7 @@ import {
   shortId,
 } from "../../utils/format";
 import { ClipboardIcon, EyeIcon, TrashIcon } from "../common/Icon";
-
-export const ORDER_STATUSES = [
-  "Pending",
-  "Processing",
-  "Shipped",
-  "Delivered",
-  "Cancelled",
-];
+import { ORDER_STATUSES } from "../../utils/orderStatuses";
 
 /** Sorting by status should follow the fulfilment pipeline, not the alphabet. */
 const STATUS_RANK = ORDER_STATUSES.reduce(
@@ -127,48 +120,52 @@ const OrderTable = ({ orders, onView }) => {
                     typeof order.user === "object" ? order.user?.email : "";
 
                   return (
-                    <tr key={order._id}>
+                    <tr key={order._id} className="hover:bg-slate-50/80 transition-colors">
                       <td>
-                        <p className="font-mono text-[12px] font-semibold text-(--ink)">
+                        <button
+                          onClick={() => onView(order._id)}
+                          className="font-mono text-[12px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline text-left cursor-pointer"
+                        >
                           {shortId(order._id)}
-                        </p>
-                        <span className="cell-sub">
+                        </button>
+                        <span className="cell-sub text-slate-400 text-[11.5px]">
                           {formatDate(order.createdAt || order.orderDate)}
                         </span>
                       </td>
                       <td>
                         <div className="flex items-center gap-2.5">
-                          <div className="avatar w-7 h-7 text-[10.5px]">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-50 to-slate-100 text-indigo-700 text-[11px] font-bold flex items-center justify-center shrink-0 border border-indigo-100 shadow-xs">
                             {initials(getCustomerName(order.user))}
                           </div>
                           <div className="min-w-0">
-                            <p className="cell-strong truncate max-w-42.5">
+                            <p className="cell-strong truncate max-w-45 text-[13px]">
                               {getCustomerName(order.user)}
                             </p>
-                            <span className="cell-sub truncate max-w-42.5">
-                              {email || "—"}
+                            <span className="cell-sub truncate max-w-45 text-slate-400 text-[11.5px]">
+                              {email || "No email"}
                             </span>
                           </div>
                         </div>
                       </td>
                       <td className="text-right whitespace-nowrap">
-                        <p className="cell-strong">
+                        <p className="cell-strong text-slate-900 font-bold text-[13.5px]">
                           {formatCurrency(order.totalAmount)}
                         </p>
-                        <span className="cell-sub">
+                        <span className="cell-sub text-slate-400 text-[11px]">
                           {itemCount} item{itemCount === 1 ? "" : "s"}
                         </span>
                       </td>
                       <td className="whitespace-nowrap">
-                        <p className="cell-strong">
-                          {order.paymentMethod || "—"}
+                        <p className="cell-strong text-slate-800 text-[12.5px]">
+                          {order.paymentMethod || "Online"}
                         </p>
                         <span
-                          className={`badge ${
+                          className={`badge mt-1 ${
                             PAYMENT_BADGE[order.paymentStatus] ||
                             "badge-neutral"
                           }`}
                         >
+                          <span className="badge-dot" />
                           {order.paymentStatus || "Unknown"}
                         </span>
                       </td>
@@ -184,9 +181,9 @@ const OrderTable = ({ orders, onView }) => {
                             )
                           }
                           aria-label={`Order status for ${shortId(order._id)}`}
-                          className={`px-2 py-1 rounded-md text-[12px] font-semibold border outline-none cursor-pointer transition-colors ${
+                          className={`px-2.5 py-1.5 rounded-lg text-[12px] font-bold border outline-none cursor-pointer transition-all shadow-xs ${
                             STATUS_SELECT[order.orderStatus] ||
-                            "border-(--border) bg-white text-(--ink)"
+                            "border-slate-200 bg-white text-slate-800"
                           }`}
                         >
                           {ORDER_STATUSES.map((status) => (

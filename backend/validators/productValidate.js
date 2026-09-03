@@ -102,4 +102,24 @@ export const productValidationSchema = z.object({
   isBestSeller: z.boolean().optional().default(false),
 
   isNewArrival: z.boolean().optional().default(false),
+
+  // 🆕 Color variants — optional array; har variant me name required,
+  // images optional (admin product images bhi use kar sakta hai).
+  variants: z
+    .array(
+      z.object({
+        name: z
+          .string({ error: "Variant name is required" })
+          .trim()
+          .min(1, "Variant name is required")
+          .max(60, "Variant name cannot exceed 60 characters"),
+        images: z
+          .array(z.string({ error: "Variant image must be a string" }))
+          .optional()
+          .default([]),
+      }),
+    )
+    .max(10, "Maximum 10 variants allowed")
+    .optional()
+    .default([]),
 });

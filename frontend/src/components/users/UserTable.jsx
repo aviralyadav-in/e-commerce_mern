@@ -77,10 +77,10 @@ const UserTable = ({ users, onEdit, onCreate }) => {
             <tbody>
               {table.rows.length > 0 ? (
                 table.rows.map((user) => (
-                  <tr key={user._id}>
+                  <tr key={user._id} className="hover:bg-slate-50/80 transition-colors">
                     <td>
-                      <div className="flex items-center gap-2.5">
-                        <div className="avatar w-8 h-8 overflow-hidden">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 text-white font-bold text-[11.5px] flex items-center justify-center shrink-0 shadow-xs ring-2 ring-indigo-100 overflow-hidden">
                           {user.avatar ? (
                             <img
                               src={getAssetUrl(user.avatar)}
@@ -92,44 +92,52 @@ const UserTable = ({ users, onEdit, onCreate }) => {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="cell-strong truncate max-w-45">
+                          <p className="cell-strong truncate max-w-45 text-[13px]">
                             {user.name}
                           </p>
-                          <span className="cell-sub font-mono">
-                            {String(user._id).slice(-8)}
+                          <span className="cell-sub font-mono text-slate-400 text-[11px]">
+                            ID: {String(user._id).slice(-8)}
                           </span>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <p className="truncate max-w-52.5 text-(--ink)">
-                        {user.email}
-                      </p>
-                      <span className="cell-sub">{user.phone || "—"}</span>
+                      <p className="cell-strong text-slate-800 text-[13px]">{user.email}</p>
+                      <span className="cell-sub text-slate-400 text-[11px]">{user.phone || "No phone added"}</span>
                     </td>
                     <td>
-                      <span className="badge badge-neutral">
-                        {GENDER_LABEL[user.gender] || "—"}
-                      </span>
+                      {user.gender ? (
+                        <span
+                          className={`badge ${
+                            user.gender === "male"
+                              ? "badge-info"
+                              : "badge-pink"
+                          }`}
+                        >
+                          {GENDER_LABEL[user.gender] || user.gender}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-[12px]">—</span>
+                      )}
                     </td>
-                    <td className="whitespace-nowrap">
-                      {formatDate(user.createdAt)}
+                    <td className="whitespace-nowrap text-slate-500 text-[12.5px]">
+                      {user.createdAt ? formatDate(user.createdAt) : "—"}
                     </td>
                     <td className="text-right">
                       <div className="flex justify-end gap-1.5">
                         <button
                           onClick={() => onEdit(user)}
-                          title="Edit customer"
-                          aria-label={`Edit ${user.name}`}
                           className="icon-btn icon-btn-edit"
+                          title="Edit user"
+                          aria-label={`Edit ${user.name}`}
                         >
                           <PencilIcon className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setDeleteTarget(user)}
-                          title="Delete customer"
-                          aria-label={`Delete ${user.name}`}
                           className="icon-btn icon-btn-delete"
+                          title="Delete user"
+                          aria-label={`Delete ${user.name}`}
                         >
                           <TrashIcon className="w-3.5 h-3.5" />
                         </button>

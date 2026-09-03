@@ -9,6 +9,50 @@ import { csvToObjects, slugify, toBool } from "../utils/csvParser.js";
 /* =========================================================
    HELPER FUNCTIONS
 ========================================================= */
+// 🆕 Variant rows ke saath uploaded variant images distribute karo.
+// Admin FormData me har variant row { name, images (retained URLs),
+// newImageCount } bhejta hai aur files 'variantImages' field me row-order
+// me aati hain — queue se sequentially utha kar rows me baantte hain.
+const buildVariantImages = (variantRows, uploadedFiles = []) => {
+  let queue = [...uploadedFiles];
+  return variantRows
+    .map((v) => {
+      const name = String(v?.name || "").trim();
+      if (!name) return null;
+      const count = Number(v?.newImageCount || 0);
+      const safeCount = Number.isFinite(count) && count > 0 ? count : 0;
+      const newPaths = queue
+        .slice(0, safeCount)
+        .map((f) => `/uploads/products/${f.filename}`);
+      queue = queue.slice(safeCount);
+      return {
+        name,
+        images: [
+          ...(Array.isArray(v?.images)
+            ? v.images.filter((img) => typeof img === "string" && img)
+            : []),
+          ...newPaths,
+        ],
+      };
+    })
+    .filter(Boolean);
+};
+
+// 🆕 FormData me variants JSON string aata hai — parse karke rows wapas
+// do. Parse fail ho toh undefined (field absent = variants untouched).
+const parseVariantsFromBody = (body) => {
+  let raw = body.variants;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  return Array.isArray(raw) ? raw : undefined;
+};
+
+
 const deleteImageFile = async (imagePath) => {
   if (!imagePath) return;
   if (imagePath.startsWith("http")) return; // External URL ignore karein
@@ -34,6 +78,10 @@ const getUploadedFilesPaths = (files) => {
   if (files.mobileImages)
     paths.push(
       ...files.mobileImages.map((f) => `/uploads/products/${f.filename}`),
+    );
+  if (files.variantImages)
+    paths.push(
+      ...files.variantImages.map((f) => `/uploads/products/${f.filename}`),
     );
   return paths;
 };
@@ -78,6 +126,17 @@ export const createProduct = async (req, res) => {
 
     // 2. Images extract karna
     req.body.images = extractImages(req);
+
+    // 2b. 🆕 Variants parse + uploaded variant images distribute karna
+    const variantRows = parseVariantsFromBody(req.body);
+    if (variantRows !== undefined) {
+      req.body.variants = buildVariantImages(
+        variantRows,
+        req.files?.variantImages || [],
+      );
+    } else {
+      delete req.body.variants; // invalid/absent — schema default [] use hoga
+    }
 
     // 3. Zod Validation
     const result = productValidationSchema.safeParse(req.body);
@@ -152,6 +211,8 @@ export const getProducts = async (req, res) => {
       collection,
       onSale,
       isActive,
+      inStock,
+      color,
       minPrice,
       maxPrice,
       search,
@@ -199,6 +260,24 @@ export const getProducts = async (req, res) => {
     // Storefront ke liye sirf active products
     if (isActive === "true") filter.isActive = true;
 
+    // 🆕 Availability filter — sirf in-stock products
+    if (inStock === "true") filter.stock = { $gt: 0 };
+
+    // 🆕 Color filter — variants.name match (case-insensitive, multi-select)
+    if (color) {
+      const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const colorRegexes = String(color)
+        .split(",")
+        .map((c) => c.trim())
+        .filter(Boolean)
+        .map((c) => new RegExp(`^${escapeRegex(c)}$`, "i"));
+      if (colorRegexes.length) {
+        andConditions.push({
+          variants: { $elemMatch: { name: { $in: colorRegexes } } },
+        });
+      }
+    }
+
     if (minPrice !== undefined || maxPrice !== undefined) {
       filter.price = {};
       if (minPrice !== undefined) filter.price.$gte = Number(minPrice);
@@ -231,6 +310,24 @@ export const getProducts = async (req, res) => {
 
     const totalPages = Math.ceil(totalProducts / Number(limit));
 
+    // 🆕 Shop filter UI ke liye — active products ke distinct variant colors
+    let availableColors = [];
+    if (isActive === "true") {
+      const variantDocs = await Product.find({
+        isActive: true,
+        "variants.0": { $exists: true },
+      })
+        .select("variants")
+        .lean();
+      availableColors = [
+        ...new Set(
+          variantDocs
+            .flatMap((p) => (p.variants || []).map((v) => v?.name))
+            .filter(Boolean),
+        ),
+      ].sort((a, b) => a.localeCompare(b));
+    }
+
     return res.status(200).json({
       message: "Products fetched successfully",
       pagination: {
@@ -241,6 +338,7 @@ export const getProducts = async (req, res) => {
         hasNextPage: Number(page) < totalPages,
         hasPrevPage: Number(page) > 1,
       },
+      availableColors,
       products,
     });
   } catch (error) {
@@ -317,6 +415,18 @@ export const updateProduct = async (req, res) => {
       req.body.images.desktop = newImages.desktop;
     if (newImages.mobile.length > 0) req.body.images.mobile = newImages.mobile;
 
+    // 2b. 🆕 Variants parse — FormData me JSON string aata hai.
+    // Absent/invalid = variants untouched (partial update me wipe na ho).
+    const variantRows = parseVariantsFromBody(req.body);
+    if (variantRows !== undefined) {
+      req.body.variants = buildVariantImages(
+        variantRows,
+        req.files?.variantImages || [],
+      );
+    } else {
+      delete req.body.variants;
+    }
+
     // 3. Partial Zod Validation
     const result = productValidationSchema.partial().safeParse(req.body);
 
@@ -328,6 +438,13 @@ export const updateProduct = async (req, res) => {
 
     // 4. Update data object (merge retained + new desktop images)
     const updateData = { ...result.data };
+
+    // 🆕 Variants partial-update guard — request me variants nahi bheje toh
+    // zod ka default [] purane variants wipe kar dega; usko roko.
+    if (req.body.variants === undefined) {
+      delete updateData.variants;
+    }
+
     const MAX_DESKTOP_IMAGES = 5;
 
     let retainedDesktop = product.images.desktop || [];
@@ -388,7 +505,10 @@ export const updateProduct = async (req, res) => {
     const updatedProduct = await Product.findByIdAndUpdate(
       id,
       { $set: updateData },
-      { new: true, runValidators: true }, // 'new: true' is standard mongoose
+      {
+        returnDocument: "after",
+        runValidators: true, // updated document return hota hai
+      },
     )
       .populate("categoryId", "name image")
       .lean();
@@ -402,6 +522,17 @@ export const updateProduct = async (req, res) => {
     }
     if (newImages.mobile.length > 0) {
       await Promise.all(product.images.mobile.map(deleteImageFile));
+    }
+
+    // 🆕 Jo variant images final set me nahi rahi, unki files delete karo
+    if (updateData.variants) {
+      const finalVariantImages = new Set(
+        updateData.variants.flatMap((v) => v.images || []),
+      );
+      const removedVariantImages = (product.variants || [])
+        .flatMap((v) => v.images || [])
+        .filter((img) => img && !finalVariantImages.has(img));
+      await Promise.all(removedVariantImages.map(deleteImageFile));
     }
 
     return res.status(200).json({

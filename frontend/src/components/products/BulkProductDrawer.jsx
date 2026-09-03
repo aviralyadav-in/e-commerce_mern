@@ -4,7 +4,7 @@ import {
   addProduct,
   fetchProducts,
 } from "../../features/products/productsSlice";
-import { pushToast } from "../../features/ui/uiSlice";
+import { notifyError, notifySuccess } from "../../lib/toast";
 import Drawer from "../common/Drawer";
 import { Field } from "../common/Field";
 import {
@@ -377,9 +377,7 @@ function BulkProductDrawer({ isOpen, onClose }) {
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) {
       setOpenKey(Object.keys(nextErrors)[0]);
-      dispatch(
-        pushToast({ type: "error", title: "Fix the highlighted rows first" }),
-      );
+      notifyError("Fix the highlighted rows first");
       return;
     }
 
@@ -435,13 +433,12 @@ function BulkProductDrawer({ isOpen, onClose }) {
     setResults(outcomes);
     setSubmitting(false);
     const ok = outcomes.filter((o) => o.ok).length;
-    dispatch(
-      pushToast({
-        type: ok === rows.length ? "success" : "error",
-        title: "Bulk add finished",
-        message: `${ok} of ${rows.length} products created.`,
-      }),
-    );
+    const summary = `${ok} of ${rows.length} products created.`;
+    if (ok === rows.length) {
+      notifySuccess("Bulk add finished", summary);
+    } else {
+      notifyError("Bulk add finished", summary);
+    }
     if (ok > 0) dispatch(fetchProducts({ limit: 100 }));
   };
 

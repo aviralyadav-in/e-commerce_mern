@@ -9,7 +9,7 @@ import {
 import { fetchCategories } from "../features/categories/categoriesSlice";
 import { exportAllProductsToExcel } from "../utils/exportProductToExcel";
 import { downloadProductsSampleCsv } from "../utils/csvTemplates";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import PageHeader from "../components/common/PageHeader";
 import ProductTable from "../components/products/ProductTable";
@@ -117,7 +117,7 @@ const ProductsPage = () => {
 
   const handleExportAll = () => {
     if (!products.length) {
-      dispatch(toastInfo("Nothing to export", "No products match this view."));
+      notifyInfo("Nothing to export", "No products match this view.");
       return;
     }
     exportAllProductsToExcel(products, getCategoryName);

@@ -1,4 +1,3 @@
-import React from "react";
 import useTableControls from "../../hooks/useTableControls";
 import EmptyState from "../common/EmptyState";
 import Pagination from "../common/Pagination";
@@ -57,52 +56,53 @@ const WishlistTable = ({ wishlists }) => {
           <tbody>
             {table.rows.length > 0 ? (
               table.rows.map((item) => (
-                <tr key={item._id}>
+                <tr key={item._id} className="hover:bg-slate-50/80 transition-colors">
                   <td>
-                    <div className="flex items-center gap-2.5">
-                      <div className="avatar w-7 h-7 text-[10.5px] bg-rose-50! text-rose-600!">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-600 font-bold text-[11px] flex items-center justify-center shrink-0 border border-rose-100 shadow-xs">
                         {initials(item.userName)}
                       </div>
                       <div className="min-w-0">
-                        <p className="cell-strong truncate max-w-42.5">
-                          {item.userName || "Unknown"}
+                        <p className="cell-strong truncate max-w-45 text-[13px]">
+                          {item.userName || "Customer"}
                         </p>
-                        <span className="cell-sub truncate max-w-42.5">
-                          {item.userEmail || "—"}
+                        <span className="cell-sub truncate max-w-45 text-slate-400 text-[11px]">
+                          {item.userEmail || "Registered Customer"}
                         </span>
                       </div>
                     </div>
                   </td>
                   <td>
-                    <div className="flex items-center gap-2.5">
+                    <div className="flex items-center gap-3">
                       <Thumb
                         src={item.productImage}
                         alt={item.productName}
-                        className="w-8 h-8"
+                        className="w-9 h-9"
+                        rounded="rounded-xl"
                       />
-                      <span className="cell-strong truncate max-w-55">
-                        {item.productName || "—"}
+                      <span className="cell-strong truncate max-w-55 text-[13px]">
+                        {item.productName || "Product item"}
                       </span>
                     </div>
                   </td>
                   <td className="text-right whitespace-nowrap">
                     {item.productDiscountPrice ? (
                       <>
-                        <p className="cell-strong text-emerald-700">
+                        <p className="cell-strong text-emerald-600 font-bold text-[13px]">
                           {formatCurrency(item.productDiscountPrice)}
                         </p>
-                        <span className="cell-sub line-through">
+                        <span className="cell-sub line-through text-slate-400 text-[11px]">
                           {formatCurrency(item.productPrice)}
                         </span>
                       </>
                     ) : (
-                      <p className="cell-strong">
+                      <p className="cell-strong text-slate-900 font-bold text-[13px]">
                         {formatCurrency(item.productPrice)}
                       </p>
                     )}
                   </td>
-                  <td className="whitespace-nowrap">
-                    {formatDate(item.addedAt)}
+                  <td className="whitespace-nowrap text-slate-500 text-[12px]">
+                    {item.addedAt ? formatDate(item.addedAt) : "Recently"}
                   </td>
                 </tr>
               ))

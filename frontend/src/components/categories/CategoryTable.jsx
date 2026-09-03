@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { deleteCategory } from "../../features/categories/categoriesSlice";
 import useTableControls from "../../hooks/useTableControls";
@@ -66,29 +66,30 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
             <tbody>
               {table.rows.length > 0 ? (
                 table.rows.map((cat) => (
-                  <tr key={cat._id}>
+                  <tr key={cat._id} className="hover:bg-slate-50/80 transition-colors">
                     <td>
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-center gap-3">
                         <Thumb
                           src={cat.image}
                           alt={cat.name}
-                          className="w-9 h-9"
+                          className="w-10 h-10"
+                          rounded="rounded-xl"
                         />
                         <div className="min-w-0">
-                          <p className="cell-strong truncate">{cat.name}</p>
-                          <span className="cell-sub font-mono truncate">
+                          <p className="cell-strong truncate text-[13px]">{cat.name}</p>
+                          <span className="cell-sub font-mono truncate text-slate-400 text-[11px]">
                             /{cat.slug}
                           </span>
                         </div>
                       </div>
                     </td>
                     <td className="max-w-70">
-                      <p className="line-clamp-2 text-(--ink-muted)">
+                      <p className="line-clamp-2 text-slate-500 text-[12.5px]">
                         {cat.description || "—"}
                       </p>
                     </td>
                     <td>
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-wrap gap-1.5">
                         {(cat.subCategories?.length
                           ? cat.subCategories
                           : ["Men", "Women"]
@@ -106,12 +107,13 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
                     </td>
                     <td>
                       <span
-                        className={`badge badge-dot ${
+                        className={`badge ${
                           cat.isActive !== false
                             ? "badge-success"
                             : "badge-neutral"
                         }`}
                       >
+                        <span className="badge-dot" />
                         {cat.isActive !== false ? "Active" : "Inactive"}
                       </span>
                     </td>
@@ -119,18 +121,18 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
                       <div className="flex justify-end gap-1.5">
                         <button
                           onClick={() => onEdit(cat)}
+                          className="icon-btn icon-btn-edit"
                           title="Edit category"
                           aria-label={`Edit ${cat.name}`}
-                          className="icon-btn icon-btn-edit"
                         >
                           <PencilIcon className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setDeleteTarget(cat)}
                           disabled={deleteLoading}
+                          className="icon-btn icon-btn-delete"
                           title="Delete category"
                           aria-label={`Delete ${cat.name}`}
-                          className="icon-btn icon-btn-delete"
                         >
                           <TrashIcon className="w-3.5 h-3.5" />
                         </button>

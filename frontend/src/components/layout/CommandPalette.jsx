@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 import { setPaletteOpen } from "../../features/ui/uiSlice";
-import { NAV_GROUPS } from "./Sidebar";
+import useFormSync from "../../hooks/useFormSync";
+import { NAV_GROUPS } from "./navGroups";
 import { SearchIcon } from "../common/Icon";
 
 const DESTINATIONS = NAV_GROUPS.flatMap((group) =>
@@ -42,15 +43,18 @@ const CommandPalette = () => {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [dispatch]);
 
+  // Reset the palette to a blank slate on every open.
+  useFormSync(`${isOpen}`, () => {
+    if (!isOpen) return;
+    setQuery("");
+    setCursor(0);
+  });
+
+  // Focus after the panel has mounted.
   useEffect(() => {
-    if (isOpen) {
-      setQuery("");
-      setCursor(0);
-      // Focus after the panel has mounted.
-      const t = setTimeout(() => inputRef.current?.focus(), 20);
-      return () => clearTimeout(t);
-    }
-    return undefined;
+    if (!isOpen) return undefined;
+    const t = setTimeout(() => inputRef.current?.focus(), 20);
+    return () => clearTimeout(t);
   }, [isOpen]);
 
   // Esc and the scroll lock sit on the document, like Drawer, so they still

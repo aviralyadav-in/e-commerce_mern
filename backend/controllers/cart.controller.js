@@ -10,6 +10,13 @@ const objectIdValidation = z
   .regex(/^[0-9a-fA-F]{24}$/, "Invalid MongoDB ObjectId");
 const addToCartRequestSchema = z.object({
   product: objectIdValidation,
+  // 🆕 Variant snapshot — same product ke alag colors alag lines banate hain
+  variantName: z
+    .string({ error: "Variant name must be a string" })
+    .trim()
+    .max(60, "Variant name cannot exceed 60 characters")
+    .nullable()
+    .optional(),
   quantity: z
     .number()
     .int()
@@ -19,6 +26,13 @@ const addToCartRequestSchema = z.object({
 
 // Absolute quantity set karne ke liye (PUT /cart/update/:productId)
 const updateCartItemSchema = z.object({
+  // 🆕 Kaunsi variant line update karni hai
+  variantName: z
+    .string({ error: "Variant name must be a string" })
+    .trim()
+    .max(60, "Variant name cannot exceed 60 characters")
+    .nullable()
+    .optional(),
   quantity: z
     .number({ error: "Quantity must be a number" })
     .int("Quantity must be an integer")
@@ -54,13 +68,25 @@ export const addToCart = async (req, res) => {
       });
     }
 
-    const { product: productId, quantity } = result.data;
+    const { product: productId, variantName, quantity } = result.data;
     const userId = req.user._id; // Auth middleware se aayega
 
     // 1. Check if product exists & fetch its REAL price
     const productExists = await Product.findById(productId);
     if (!productExists || !productExists.isActive) {
       return res.status(404).json({ message: "Product not found or inactive" });
+    }
+
+    // 1b. 🆕 Variant check — diya gaya variant product par exist karna chahiye
+    if (variantName) {
+      const hasVariant = (productExists.variants || []).some(
+        (v) => v.name === variantName,
+      );
+      if (!hasVariant) {
+        return res
+          .status(400)
+          .json({ message: "Selected variant is not available" });
+      }
     }
 
     // 2. Stock check kar sakte hain yahan (Optional but recommended)
@@ -76,21 +102,25 @@ export const addToCart = async (req, res) => {
       cart = new Cart({ user: userId, items: [] });
     }
 
-    // 4. Check agar product already cart me hai
+    // 4. 🆕 Product + variant combo already cart me hai?
+    // (Black aur Brown ek hi product ke alag lines honge)
     const itemIndex = cart.items.findIndex(
-      (item) => item.product.toString() === productId,
+      (item) =>
+        item.product.toString() === productId &&
+        (item.variantName || null) === (variantName || null),
     );
 
     if (itemIndex > -1) {
-      // Product pehle se hai -> sirf quantity update karein
+      // Line pehle se hai -> sirf quantity update karein
       cart.items[itemIndex].quantity += quantity;
 
       // Price bhi update kar do, in case admin ne price change kar di ho
       cart.items[itemIndex].price = productExists.price;
     } else {
-      // Naya product cart me push karein
+      // Nayi line cart me push karein
       cart.items.push({
         product: productId,
+        variantName: variantName || null,
         quantity: quantity,
         price: productExists.price, // REAL price from DB
       });
@@ -168,15 +198,18 @@ export const updateCartItem = async (req, res) => {
       });
     }
 
-    const { quantity } = result.data;
+    const { quantity, variantName } = result.data;
 
     const cart = await Cart.findOne({ user: userId });
     if (!cart) {
       return res.status(404).json({ message: "Cart not found" });
     }
 
+    // 🆕 Product + variant combo hi dhoondo (product ke multiple variant lines ho sakti hain)
     const itemIndex = cart.items.findIndex(
-      (item) => item.product.toString() === productId,
+      (item) =>
+        item.product.toString() === productId &&
+        (item.variantName || null) === (variantName || null),
     );
     if (itemIndex === -1) {
       return res
@@ -222,6 +255,12 @@ export const removeFromCart = async (req, res) => {
     const { productId } = req.params;
     const userId = req.user._id;
 
+    // 🆕 Optional variantName — diya toh sirf wahi variant line remove hogi,
+    // nahi diya toh poore product ki saari lines (legacy behaviour)
+    const variantName = req.query.variantName
+      ? String(req.query.variantName)
+      : null;
+
     if (!mongoose.Types.ObjectId.isValid(productId)) {
       return res.status(400).json({ message: "Invalid Product ID" });
     }
@@ -232,10 +271,12 @@ export const removeFromCart = async (req, res) => {
       return res.status(404).json({ message: "Cart not found" });
     }
 
-    // Product ko array se filter out karein
-    cart.items = cart.items.filter(
-      (item) => item.product.toString() !== productId,
-    );
+    // Product (+ variant match) ko array se filter out karein
+    cart.items = cart.items.filter((item) => {
+      if (item.product.toString() !== productId) return true;
+      if (variantName === null) return false;
+      return (item.variantName || null) !== variantName;
+    });
 
     // Filter karne ke baad totals wapas calculate karein
     calculateCartTotals(cart);
@@ -300,11 +341,12 @@ export const getAllCarts = async (req, res) => {
         cart.items.forEach((item) => {
           if (item.product) {
             flatData.push({
-              _id: `${cart._id}-${item.product._id}`,
+              _id: `${cart._id}-${item.product._id}-${item.variantName || "plain"}`,
               userName: cart.user.name,
               userEmail: cart.user.email,
               userPhone: cart.user.phone || "N/A",
               productName: item.product.name,
+              productVariant: item.variantName || null,
               productPrice: item.product.price,
               productDiscountPrice: item.product.discountPrice,
               productImage:

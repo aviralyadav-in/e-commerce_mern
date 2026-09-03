@@ -1,11 +1,11 @@
-import React, { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   fetchOrderById,
   clearSelectedOrder,
 } from "../../features/orders/ordersSlice";
 import Thumb from "../common/Thumb";
-import { ORDER_STATUSES } from "./OrderTable";
+import { ORDER_STATUSES } from "../../utils/orderStatuses";
 import {
   formatCurrency,
   formatDateTime,
@@ -166,7 +166,7 @@ const OrderDetailModal = ({ isOpen, orderId, onClose }) => {
                       const done = i <= reachedIndex;
                       const current = i === reachedIndex;
                       return (
-                        <React.Fragment key={step}>
+                        <Fragment key={step}>
                           <div className="flex flex-col items-center gap-1.5 shrink-0">
                             <span
                               className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border ${
@@ -202,7 +202,7 @@ const OrderDetailModal = ({ isOpen, orderId, onClose }) => {
                               }`}
                             />
                           )}
-                        </React.Fragment>
+                        </Fragment>
                       );
                     })}
                   </div>

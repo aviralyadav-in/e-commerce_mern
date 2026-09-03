@@ -1,4 +1,3 @@
-import React from "react";
 import { SearchIcon, XIcon } from "./Icon";
 
 const SearchInput = ({

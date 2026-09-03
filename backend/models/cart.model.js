@@ -14,6 +14,14 @@ const cartSchema = new mongoose.Schema(
           ref: "Product",
           required: true,
         },
+        // 🆕 Color variant snapshot — same product ke alag variants
+        // (Black vs Brown) alag cart lines banate hain.
+        variantName: {
+          type: String,
+          default: null,
+          trim: true,
+          maxlength: [60, "Variant name cannot exceed 60 characters"],
+        },
         quantity: {
           type: Number,
           required: true,

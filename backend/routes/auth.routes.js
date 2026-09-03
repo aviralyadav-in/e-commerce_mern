@@ -13,7 +13,7 @@ import {
 } from "../controllers/auth.controller.js";
 import { protectedRoute } from "../middleware/auth.middleware.js";
 import { adminRoute } from "../middleware/admin.middleware.js";
-import { avatarUpload } from "../middleware/upload.middleware.js";
+import { avatarUploadWithErrorHandling } from "../middleware/upload.middleware.js";
 
 const authRouter = express.Router();
 
@@ -24,13 +24,16 @@ authRouter.get("/admin/me", adminRoute, getAdminMe);
 authRouter.post("/admin/logout", adminLogout);
 authRouter.post("/logout", protectedRoute, logout);
 authRouter.get("/profile", protectedRoute, getProfile);
-authRouter.put("/profile", protectedRoute, updateProfile);
+// 🛠️ REST standard: partial update ke liye PATCH. Controller already
+// partial-update semantics implement karta hai (sirf bheji hui fields
+// update hoti hain), isliye PUT route hata diya gaya
+authRouter.patch("/profile", protectedRoute, updateProfile);
 
 // 🆕 Profile photo upload / remove
 authRouter.put(
   "/profile/avatar",
   protectedRoute,
-  avatarUpload.single("avatar"),
+  avatarUploadWithErrorHandling,
   updateAvatar,
 );
 authRouter.delete("/profile/avatar", protectedRoute, removeAvatar);

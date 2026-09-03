@@ -66,6 +66,36 @@ export const bannerUpload = createUpload("banners"); // 🔥 Banner export added
 export const avatarUpload = createUpload("avatars"); // 🆕 User profile photos
 
 /* =========================================================
+   🆕 Avatar upload WITH error handling
+   Multer errors (file > 5MB, invalid type) directly global error
+   handler me 500 ban jaate the — ye wrapper unhe clean 400 banata hai
+========================================================= */
+export const avatarUploadWithErrorHandling = [
+  avatarUpload.single("avatar"),
+
+  // Multer error handler — 4 args hone se Express ise error middleware
+  // ki tarah treat karta hai
+  (err, req, res, next) => {
+    if (!err) return next();
+
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        message: "Avatar image must be 5MB or smaller",
+      });
+    }
+
+    if (err.message?.includes("Only JPG")) {
+      return res.status(400).json({ message: err.message });
+    }
+
+    console.error("Avatar Upload Error:", err);
+    return res.status(400).json({
+      message: err.message || "Avatar upload failed",
+    });
+  },
+];
+
+/* =========================================================
    🆕 CSV BULK UPLOAD (memory storage — file disk par nahi jaati,
       buffer ko direct controllers parse karte hain)
 ========================================================= */

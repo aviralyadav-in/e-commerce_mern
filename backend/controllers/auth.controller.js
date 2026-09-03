@@ -9,6 +9,24 @@ import {
   userValidationSchema,
 } from "../validators/userValidate.js";
 
+/* ==========================================
+   🔐 AUTH COOKIE OPTIONS (single source of truth)
+   - secure flag .env se control hota hai:
+     development → COOKIE_SECURE=false (HTTP chalega)
+     production  → COOKIE_SECURE=true  (HTTPS ke liye ZAROORI)
+   - Saare set/clear cookie calls isi helper se options lete hain,
+     taaki kabhi ek jagah change karke doosri jagah miss na ho
+========================================== */
+const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+
+const authCookieOptions = (withMaxAge = false) => ({
+  httpOnly: true,
+  secure: process.env.COOKIE_SECURE === "true",
+  sameSite: "lax",
+  path: "/",
+  ...(withMaxAge ? { maxAge: SEVEN_DAYS } : {}),
+});
+
 // ==========================================
 // 1. SIGNUP CONTROLLER
 // ==========================================
@@ -55,12 +73,7 @@ export const signup = async (req, res) => {
       expiresIn: "7d",
     });
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, authCookieOptions(true));
 
     // Password ko response se hide karne ke liye
     user.password = undefined;
@@ -109,12 +122,7 @@ export const login = async (req, res) => {
       expiresIn: "7d",
     });
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("token", token, authCookieOptions(true));
 
     // Response me password na bheje
     user.password = undefined;
@@ -141,13 +149,17 @@ export const adminLogin = async (req, res) => {
     const admin = await Admin.findOne({ email }).select("+password");
 
     if (!admin) {
-      return res.status(401).json({ message: "Invalid admin email or password" });
+      return res
+        .status(401)
+        .json({ message: "Invalid admin email or password" });
     }
 
     const isPasswordCorrect = await bcryptjs.compare(password, admin.password);
 
     if (!isPasswordCorrect) {
-      return res.status(401).json({ message: "Invalid admin email or password" });
+      return res
+        .status(401)
+        .json({ message: "Invalid admin email or password" });
     }
 
     const token = jwt.sign({ userId: admin._id }, process.env.JWT_SECRET, {
@@ -156,12 +168,7 @@ export const adminLogin = async (req, res) => {
 
     // 🛠️ FIX: Admin ka JWT alag cookie naam ('adminToken') me — warna yahi
     // cookie storefront ke 'token' ko overwrite karke usse logout kar deti thi
-    res.cookie("adminToken", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
+    res.cookie("adminToken", token, authCookieOptions(true));
 
     admin.password = undefined;
 
@@ -196,12 +203,7 @@ export const getAdminMe = async (req, res) => {
 export const adminLogout = async (req, res) => {
   try {
     // 🛠️ FIX: sirf admin wali cookie clear karo — user ka 'token' safe rahe
-    res.clearCookie("adminToken", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-    });
+    res.clearCookie("adminToken", authCookieOptions());
 
     return res.status(200).json({
       message: "Admin logged out successfully",
@@ -220,12 +222,7 @@ export const logout = async (req, res) => {
     // FIX: req.user could be undefined if admin logged out via this route
     const name = req.user?.name || "User";
 
-    res.clearCookie("token", {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-    });
+    res.clearCookie("token", authCookieOptions());
 
     return res.status(200).json({
       message: `${name} Logged out successfully`,
@@ -267,7 +264,9 @@ export const updateProfile = async (req, res) => {
     }
 
     // FIX: Schema ke hisab se exact fields extract kiye
-    const { name, email, phone, avatar, gender, dateOfBirth } = result.data;
+    // (avatar yahan intentionally NAHI hai — wo sirf dedicated
+    //  PUT /profile/avatar upload endpoint se update hota hai)
+    const { name, email, phone, gender, dateOfBirth } = result.data;
     const userId = req.user._id;
 
     // Email check if user is updating email
@@ -290,7 +289,6 @@ export const updateProfile = async (req, res) => {
     if (name !== undefined) updateData.name = name;
     if (email !== undefined) updateData.email = email;
     if (phone !== undefined) updateData.phone = phone;
-    if (avatar !== undefined) updateData.avatar = avatar;
     if (gender !== undefined) updateData.gender = gender;
     if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
 
@@ -298,10 +296,14 @@ export const updateProfile = async (req, res) => {
       return res.status(400).json({ message: "Nothing to update" });
     }
 
-    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
-      new: true,
-      runValidators: true,
-    });
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      updateData,
+      {
+        returnDocument: "after",
+        runValidators: true,
+      },
+    );
 
     return res.status(200).json({
       message: "Profile updated successfully",
@@ -317,10 +319,23 @@ export const updateProfile = async (req, res) => {
    🆕 LOCAL FILE CLEANUP HELPER (avatar ke liye)
    External (http) URLs ko skip karta hai
 ========================================== */
+// 🛡️ Security root — sirf is folder ke andar ki files hi delete ho sakti hain
+const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
+
 const deleteLocalFile = async (imagePath) => {
   if (!imagePath || imagePath.startsWith("http")) return;
   try {
-    const filePath = path.join(process.cwd(), imagePath.replace(/^\/+/, ""));
+    const filePath = path.resolve(
+      process.cwd(),
+      imagePath.replace(/^\/+/, ""),
+    );
+
+    // 🛡️ Path traversal guard — kabhi uploads/ ke bahar delete na ho
+    if (!filePath.startsWith(UPLOADS_ROOT + path.sep)) {
+      console.warn("Blocked avatar delete outside uploads dir:", imagePath);
+      return;
+    }
+
     await fs.unlink(filePath);
   } catch (error) {
     if (error.code !== "ENOENT") {
@@ -342,23 +357,38 @@ export const updateAvatar = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user._id);
-    if (!user) {
+    const newAvatarPath = `/uploads/avatars/${req.file.filename}`;
+    const userId = req.user._id;
+
+    // ⚡ Optimized: sirf 'avatar' field fetch hoti hai (poora document nahi)
+    const oldUser = await User.findById(userId).select("avatar");
+    if (!oldUser) {
+      // User exist nahi karta — bina orphan file chhode clean karo
+      await deleteLocalFile(newAvatarPath);
       return res.status(404).json({ message: "User not found" });
     }
 
-    const newAvatarPath = `/uploads/avatars/${req.file.filename}`;
+    // ⚡ Atomic update — findById + save() ka full-document overhead nahi
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: { avatar: newAvatarPath } },
+      { returnDocument: "after" },
+    );
 
-    // Purani local file hatao (nayi replace hone se pehle)
-    await deleteLocalFile(user.avatar);
+    if (!updatedUser) {
+      await deleteLocalFile(newAvatarPath);
+      return res.status(404).json({ message: "User not found" });
+    }
 
-    user.avatar = newAvatarPath;
-    await user.save();
+    // ✅ Correct order: DB update hone ke BAAD purani file delete karo.
+    //    - DB update fail ho jaye → user ki purani photo bachi rehti hai
+    //    - File delete fail ho jaye → sirf orphan file bachi hai (chhoti problem)
+    //    (Pehle file pehle delete hoti thi — save fail hone par photo chali jaati)
+    await deleteLocalFile(oldUser.avatar);
 
-    user.password = undefined;
     return res.status(200).json({
       message: "Profile photo updated successfully",
-      user,
+      user: updatedUser,
     });
   } catch (error) {
     console.error("Update Avatar Error:", error);
@@ -375,20 +405,35 @@ export const updateAvatar = async (req, res) => {
 ========================================== */
 export const removeAvatar = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
-    if (!user) {
+    const userId = req.user._id;
+
+    // ⚡ Optimized: sirf avatar field chahiye
+    const oldUser = await User.findById(userId).select("avatar");
+    if (!oldUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    await deleteLocalFile(user.avatar);
+    // ⚡ Early return: avatar pehle se empty hai to useless DB write nahi
+    if (!oldUser.avatar) {
+      return res.status(200).json({
+        message: "No profile photo to remove",
+        user: req.user,
+      });
+    }
 
-    user.avatar = "";
-    await user.save();
+    // ⚡ Atomic update — ek hi query me avatar clear
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: { avatar: "" } },
+      { returnDocument: "after" },
+    );
 
-    user.password = undefined;
+    // ✅ DB safe hone ke baad hi file delete karo
+    await deleteLocalFile(oldUser.avatar);
+
     return res.status(200).json({
       message: "Profile photo removed successfully",
-      user,
+      user: updatedUser,
     });
   } catch (error) {
     console.error("Remove Avatar Error:", error);

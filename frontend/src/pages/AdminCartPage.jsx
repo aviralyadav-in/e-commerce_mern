@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllCarts } from "../features/adminCart/adminCartSlice";
 import { exportAllCartsToExcel } from "../utils/exportProductToExcel";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import AdminCartTable from "../components/adminCart/AdminCartTable";
 import PageHeader from "../components/common/PageHeader";
@@ -47,7 +47,7 @@ const AdminCartPage = () => {
 
   const handleExportAll = () => {
     if (!carts.length) {
-      dispatch(toastInfo("Nothing to export", "No active carts right now."));
+      notifyInfo("Nothing to export", "No active carts right now.");
       return;
     }
     exportAllCartsToExcel(carts);

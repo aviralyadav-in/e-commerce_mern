@@ -34,6 +34,20 @@ const bannerSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    // 🆕 Kis page par dikhe — multi-page promo banners (niyabags jaisa)
+    page: {
+      type: String,
+      enum: ["home", "shop", "wishlist"],
+      default: "home",
+    },
+
+    // 🆕 Page par kahan dikhe — hero ke baad ya products grid ke baad
+    position: {
+      type: String,
+      enum: ["after-hero", "after-products"],
+      default: "after-hero",
+    },
   },
   {
     timestamps: true,

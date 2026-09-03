@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllReviews } from "../features/reviews/reviewsSlice";
 import { exportAllReviewsToExcel } from "../utils/exportProductToExcel";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import ReviewTable from "../components/reviews/ReviewTable";
 import PageHeader from "../components/common/PageHeader";
@@ -65,9 +65,7 @@ const ReviewsPage = () => {
 
   const handleExportAll = () => {
     if (!reviews.length) {
-      dispatch(
-        toastInfo("Nothing to export", "No reviews have been left yet."),
-      );
+      notifyInfo("Nothing to export", "No reviews have been left yet.");
       return;
     }
     exportAllReviewsToExcel(reviews);

@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchAllWishlists } from "../features/wishlist/wishlistSlice";
 import { exportAllWishlistsToExcel } from "../utils/exportProductToExcel";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import WishlistTable from "../components/wishlist/WishlistTable";
 import PageHeader from "../components/common/PageHeader";
@@ -48,7 +48,7 @@ const WishlistPage = () => {
 
   const handleExportAll = () => {
     if (!wishlists.length) {
-      dispatch(toastInfo("Nothing to export", "No products saved yet."));
+      notifyInfo("Nothing to export", "No products saved yet.");
       return;
     }
     exportAllWishlistsToExcel(wishlists);

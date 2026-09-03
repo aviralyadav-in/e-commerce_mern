@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchOrders } from "../features/orders/ordersSlice";
 import { fetchUsers } from "../features/users/usersSlice";
 import { exportAllOrdersToExcel } from "../utils/exportProductToExcel";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import PageHeader from "../components/common/PageHeader";
-import OrderTable, { ORDER_STATUSES } from "../components/orders/OrderTable";
+import OrderTable from "../components/orders/OrderTable";
+import { ORDER_STATUSES } from "../utils/orderStatuses";
 import OrderDetailModal from "../components/orders/OrderDetailModal";
 import SearchInput from "../components/common/SearchInput";
 import SegmentedFilter from "../components/common/SegmentedFilter";
@@ -28,12 +29,16 @@ const OrdersPage = () => {
     dispatch(fetchOrders());
   }, [dispatch, users.length]);
 
-  const getCustomerName = (user) => {
-    if (typeof user === "object" && user?.name) return user.name;
-    const idStr = typeof user === "object" ? user?._id : user;
-    const found = users.find((u) => u._id === idStr);
-    return found ? found.name : "Unknown";
-  };
+  /** Resolves embedded vs referenced user into a display name. */
+  const getCustomerName = useCallback(
+    (user) => {
+      if (typeof user === "object" && user?.name) return user.name;
+      const idStr = typeof user === "object" ? user?._id : user;
+      const found = users.find((u) => u._id === idStr);
+      return found ? found.name : "Unknown";
+    },
+    [users],
+  );
 
   const statusCounts = useMemo(() => {
     const counts = {};
@@ -61,7 +66,7 @@ const OrdersPage = () => {
         String(order.couponCode || "").toLowerCase().includes(q)
       );
     });
-  }, [orders, search, status, users]);
+  }, [orders, search, status, getCustomerName]);
 
   const openCount = statusCounts.Pending + statusCounts.Processing;
 
@@ -76,7 +81,7 @@ const OrdersPage = () => {
 
   const handleExport = () => {
     if (!orders.length) {
-      dispatch(toastInfo("Nothing to export", "No orders have been placed yet."));
+      notifyInfo("Nothing to export", "No orders have been placed yet.");
       return;
     }
     exportAllOrdersToExcel(orders, getCustomerName);

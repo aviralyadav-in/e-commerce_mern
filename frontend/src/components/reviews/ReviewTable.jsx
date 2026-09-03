@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { deleteReview } from "../../features/reviews/reviewsSlice";
 import useTableControls from "../../hooks/useTableControls";
@@ -89,18 +89,18 @@ const ReviewTable = ({ reviews }) => {
                     review.product?.images?.desktop?.[0] ||
                     review.product?.images?.mobile?.[0];
                   return (
-                    <tr key={review._id}>
+                    <tr key={review._id} className="hover:bg-slate-50/80 transition-colors">
                       <td>
                         <div className="flex items-center gap-2.5">
-                          <div className="avatar w-7 h-7 text-[10.5px] bg-orange-50! text-(--brand)!">
+                          <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-indigo-100">
                             {initials(review.user?.name)}
                           </div>
                           <div className="min-w-0">
-                            <p className="cell-strong truncate max-w-37.5">
-                              {review.user?.name || "Unknown"}
+                            <p className="cell-strong truncate max-w-40 text-[13px]">
+                              {review.user?.name || "Customer"}
                             </p>
-                            <span className="cell-sub truncate max-w-37.5">
-                              {review.user?.email || "—"}
+                            <span className="cell-sub truncate max-w-40 text-slate-400 text-[11px]">
+                              {review.user?.email || "Verified Buyer"}
                             </span>
                           </div>
                         </div>
@@ -110,38 +110,41 @@ const ReviewTable = ({ reviews }) => {
                           <Thumb
                             src={productImg}
                             alt={review.product?.name}
-                            className="w-8 h-8"
+                            className="w-9 h-9"
+                            rounded="rounded-lg"
                           />
-                          <span className="cell-strong truncate max-w-40">
-                            {review.product?.name || "—"}
-                          </span>
+                          <p className="cell-strong truncate max-w-45 text-[12.5px]">
+                            {review.product?.name || "Product item"}
+                          </p>
                         </div>
                       </td>
-                      <td>
-                        <div className="flex items-center gap-1.5">
-                          <StarRow rating={review.rating || 0} />
-                          <span className="text-[11.5px] font-semibold text-(--ink-muted)">
-                            {review.rating || 0}
+                      <td className="whitespace-nowrap">
+                        <div className="space-y-0.5">
+                          <StarRow rating={review.rating} />
+                          <span className="cell-sub font-bold text-slate-800 text-[11.5px]">
+                            {review.rating} of 5 stars
                           </span>
                         </div>
                       </td>
                       <td className="max-w-65">
-                        <p className="line-clamp-2 text-(--ink-muted)">
-                          {review.comment || "—"}
+                        <p className="line-clamp-2 text-slate-600 text-[12.5px] italic">
+                          "{review.comment || review.review || "No written review"}"
                         </p>
                       </td>
-                      <td className="whitespace-nowrap">
+                      <td className="whitespace-nowrap text-slate-500 text-[12px]">
                         {formatDate(review.createdAt)}
                       </td>
                       <td className="text-right">
-                        <button
-                          onClick={() => setDeleteTarget(review)}
-                          className="icon-btn icon-btn-delete"
-                          title="Delete review"
-                          aria-label="Delete review"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5" />
-                        </button>
+                        <div className="flex justify-end">
+                          <button
+                            onClick={() => setDeleteTarget(review)}
+                            className="icon-btn icon-btn-delete"
+                            title="Delete review"
+                            aria-label="Delete review"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

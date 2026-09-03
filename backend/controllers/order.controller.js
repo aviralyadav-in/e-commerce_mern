@@ -17,6 +17,13 @@ const createOrderRequestSchema = z.object({
     .array(
       z.object({
         product: objectIdValidation,
+        // 🆕 Variant snapshot — order history me color dikhe
+        variantName: z
+          .string({ error: "Variant name must be a string" })
+          .trim()
+          .max(60, "Variant name cannot exceed 60 characters")
+          .nullable()
+          .optional(),
         quantity: z.number().int().min(1, "Quantity must be at least 1"),
       }),
     )
@@ -78,12 +85,25 @@ export const createOrder = async (req, res) => {
         });
       }
 
+      // 🆕 Variant validation — product par ye variant exist karna chahiye
+      if (item.variantName) {
+        const hasVariant = (product.variants || []).some(
+          (v) => v.name === item.variantName,
+        );
+        if (!hasVariant) {
+          return res.status(400).json({
+            message: `Selected variant is not available for ${product.name}`,
+          });
+        }
+      }
+
       // Backend se real price set karna
       const itemTotalPrice = product.price * item.quantity;
       itemsPrice += itemTotalPrice;
 
       finalOrderItems.push({
         product: product._id,
+        variantName: item.variantName || null,
         quantity: item.quantity,
         price: product.price, // Real DB Price
       });

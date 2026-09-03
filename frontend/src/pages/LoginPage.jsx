@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router";
 import {
@@ -6,8 +6,15 @@ import {
   clearAuthError,
   checkAuth,
 } from "../features/auth/authSlice";
-import { Field } from "../components/common/Field";
-import { AlertIcon, BagIcon, EyeIcon } from "../components/common/Icon";
+import {
+  AlertIcon,
+  BagIcon,
+  EyeIcon,
+  EyeOffIcon,
+  LockIcon,
+  MailIcon,
+  ShieldCheckIcon,
+} from "../components/common/Icon";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
@@ -37,81 +44,137 @@ const LoginPage = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    dispatch(loginAdmin({ email, password }));
+    if (!email.trim() || !password) return;
+    dispatch(loginAdmin({ email: email.trim(), password }));
   };
 
   if (!authChecked) {
     return (
-      <div className="min-h-screen bg-(--ink) flex items-center justify-center">
-        <span className="spinner w-8 h-8 border-[3px]" />
+      <div className="min-h-screen bg-[#070b14] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <span className="w-10 h-10 rounded-full border-3 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+          <p className="text-xs font-medium text-slate-400 tracking-wider uppercase">
+            Loading Console…
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-(--ink) flex items-center justify-center p-4 relative overflow-hidden">
-      <div
-        className="absolute inset-0 opacity-40"
-        style={{
-          backgroundImage:
-            "radial-gradient(ellipse 80% 50% at 20% 40%, rgba(234,88,12,0.35), transparent), radial-gradient(ellipse 60% 40% at 80% 70%, rgba(14,165,233,0.2), transparent)",
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-[0.07]"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px)",
-          backgroundSize: "48px 48px",
-        }}
-      />
+    <div className="min-h-screen bg-[#070b14] text-slate-100 flex items-center justify-center p-4 sm:p-6 relative overflow-hidden font-sans select-none">
+      {/* Dynamic Ambient Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div
+          className="absolute -top-[20%] -left-[10%] w-[600px] h-[600px] rounded-full opacity-30 blur-[120px]"
+          style={{
+            background: "radial-gradient(circle, #6366f1 0%, transparent 70%)",
+          }}
+        />
+        <div
+          className="absolute -bottom-[20%] -right-[10%] w-[600px] h-[600px] rounded-full opacity-25 blur-[130px]"
+          style={{
+            background: "radial-gradient(circle, #8b5cf6 0%, transparent 70%)",
+          }}
+        />
+        <div
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] rounded-full opacity-15 blur-[100px]"
+          style={{
+            background: "radial-gradient(circle, #0ea5e9 0%, transparent 70%)",
+          }}
+        />
+        {/* Subtle Grid Matrix */}
+        <div
+          className="absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage:
+              "linear-gradient(#ffffff 1px, transparent 1px), linear-gradient(90deg, #ffffff 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
+      </div>
 
-      <div className="w-full max-w-100 relative z-10">
-        <div className="bg-white rounded-lg shadow-2xl shadow-black/40 border-t-[3px] border-(--brand) p-7 sm:p-8">
-          <div className="flex items-center gap-2.5 mb-7">
-            <span className="w-10 h-10 rounded-(--radius) bg-(--brand) text-white flex items-center justify-center shrink-0">
-              <BagIcon className="w-5 h-5" />
-            </span>
+      <div className="w-full max-w-[440px] relative z-10">
+        {/* Main Glassmorphism Card */}
+        <div className="relative rounded-3xl bg-slate-900/80 backdrop-blur-2xl border border-slate-800/90 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_40px_rgba(99,102,241,0.12)] p-7 sm:p-9 transition-all duration-300 ring-1 ring-white/10">
+          {/* Subtle Top Glowing Border Accent */}
+          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent rounded-t-3xl" />
+
+          {/* Header & Branding */}
+          <div className="flex items-center gap-4 mb-7">
+            <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-600/30 ring-1 ring-white/25">
+              <BagIcon className="w-6.5 h-6.5" />
+            </div>
             <div>
-              <h1 className="font-display text-[19px] font-bold text-(--ink) tracking-[-0.015em] leading-none">
-                Bag Store
-              </h1>
-              <p className="text-[11.5px] text-(--ink-muted) mt-1">
-                Admin panel
+              <div className="flex items-center gap-2.5">
+                <h1 className="text-[22px] font-black tracking-tight text-white leading-none">
+                  Bag Store
+                </h1>
+                <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-500/30 shadow-xs">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  ADMIN
+                </span>
+              </div>
+              <p className="text-[12px] text-slate-400 mt-1.5 font-medium tracking-wide">
+                Enterprise Commerce Console
               </p>
             </div>
           </div>
 
-          <h2 className="text-[15px] font-bold text-(--ink)">
-            Sign in to continue
-          </h2>
-          <p className="text-[12.5px] text-(--ink-muted) mt-1 mb-5">
-            Use the admin credentials issued for this store.
-          </p>
+          <div className="mb-6">
+            <h2 className="text-[17px] font-bold text-white tracking-tight">
+              Welcome back
+            </h2>
+            <p className="text-[13px] text-slate-400 mt-1">
+              Please enter your administrator credentials to continue.
+            </p>
+          </div>
 
+          {/* Error Message */}
           {error && (
-            <div className="flex items-start gap-2 px-3 py-2.5 mb-4 rounded-(--radius) bg-red-50 border border-red-200">
-              <AlertIcon className="w-4 h-4 text-(--danger) shrink-0 mt-px" />
-              <p className="text-[12.5px] text-red-700">{error}</p>
+            <div className="flex items-start gap-3 p-3.5 mb-5 rounded-xl bg-red-500/10 border border-red-500/30 text-red-200 text-[13px] leading-relaxed shadow-xs animate-shake">
+              <AlertIcon className="w-4.5 h-4.5 text-red-400 shrink-0 mt-0.5" />
+              <span className="font-medium">{error}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Field label="Email address" required htmlFor="login-email">
-              <input
-                id="login-email"
-                type="email"
-                required
-                autoComplete="username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="enter email"
-                className="form-input form-input-lg"
-              />
-            </Field>
+          {/* Sign In Form */}
+          <form onSubmit={handleSubmit} className="space-y-5 select-text">
+            <div>
+              <label
+                htmlFor="login-email"
+                className="block text-[12px] font-semibold tracking-wider uppercase text-slate-300 mb-2"
+              >
+                Admin Email <span className="text-indigo-400">*</span>
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-400 transition-colors">
+                  <MailIcon className="w-4.5 h-4.5" />
+                </div>
+                <input
+                  id="login-email"
+                  type="email"
+                  required
+                  autoComplete="username"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="admin@bagstore.com"
+                  className="w-full pl-10.5 pr-4 py-3 bg-slate-950/70 border border-slate-800 rounded-xl text-[14px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all duration-200 shadow-inner"
+                />
+              </div>
+            </div>
 
-            <Field label="Password" required htmlFor="login-password">
-              <div className="relative">
+            <div>
+              <label
+                htmlFor="login-password"
+                className="block text-[12px] font-semibold tracking-wider uppercase text-slate-300 mb-2"
+              >
+                Password <span className="text-indigo-400">*</span>
+              </label>
+              <div className="relative group">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-400 transition-colors">
+                  <LockIcon className="w-4.5 h-4.5" />
+                </div>
                 <input
                   id="login-password"
                   type={showPassword ? "text" : "password"}
@@ -119,37 +182,47 @@ const LoginPage = () => {
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="form-input form-input-lg"
-                  /* .form-input-lg sets padding unlayered, so Tailwind's pr-* would lose. */
-                  style={{ paddingRight: 38 }}
+                  placeholder="••••••••••••"
+                  className="w-full pl-10.5 pr-11 py-3 bg-slate-950/70 border border-slate-800 rounded-xl text-[14px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all duration-200 shadow-inner font-sans"
                 />
                 <button
                   type="button"
-                  onClick={() => setShowPassword((v) => !v)}
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 icon-btn icon-btn-ghost"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
                   aria-label={showPassword ? "Hide password" : "Show password"}
-                  title={showPassword ? "Hide password" : "Show password"}
+                  tabIndex={-1}
                 >
-                  <EyeIcon className="w-4 h-4" />
+                  {showPassword ? (
+                    <EyeOffIcon className="w-4.5 h-4.5" />
+                  ) : (
+                    <EyeIcon className="w-4.5 h-4.5" />
+                  )}
                 </button>
               </div>
-            </Field>
+            </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary btn-lg w-full mt-1"
+              className="w-full mt-2 py-3.5 px-5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] text-white font-bold text-[14px] tracking-wide shadow-lg shadow-indigo-600/35 hover:shadow-indigo-600/50 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {loading && <span className="spinner spinner-on-brand" />}
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? (
+                <>
+                  <span className="w-4.5 h-4.5 rounded-full border-2 border-white/30 border-t-white animate-spin shrink-0" />
+                  <span>Verifying Credentials…</span>
+                </>
+              ) : (
+                <span>Sign In to Dashboard</span>
+              )}
             </button>
           </form>
         </div>
 
-        <p className="text-center text-[11.5px] text-white/45 mt-5">
-          Bag Store admin · authorised staff only
-        </p>
+        {/* Security / System Footer Note */}
+        <div className="flex items-center justify-center gap-2 text-[12px] text-slate-400 font-medium mt-6">
+          <ShieldCheckIcon className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>Protected Enterprise Session · Bag Store Cloud</span>
+        </div>
       </div>
     </div>
   );

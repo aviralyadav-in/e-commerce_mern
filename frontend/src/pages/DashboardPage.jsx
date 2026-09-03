@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchUsers } from "../features/users/usersSlice";
@@ -181,151 +181,190 @@ const DashboardPage = () => {
   });
 
   return (
-    <div className="page-shell">
-      <PageHeader
-        title="Dashboard"
-        subtitle={`Store overview · ${todayLabel}`}
-        meta={
-          <>
-            <span className="meta-chip meta-chip-brand">
-              <b>{formatCurrency(stats.avgOrder, { compact: true })}</b> avg
-              order
-            </span>
-            <span className="meta-chip meta-chip-warning">
-              <b>{stats.openOrders}</b> awaiting action
-            </span>
-            <span className="meta-chip">
-              <b>{categories.length}</b> categories
-            </span>
-          </>
-        }
-        actions={
-          <>
-            <Link to="/products" className="btn btn-secondary">
-              Products
-            </Link>
-            <Link to="/orders" className="btn btn-primary">
-              View orders
-            </Link>
-          </>
-        }
-      />
+    <div className="page-shell space-y-6">
+      {/* Welcome Hero Banner */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-7 text-white shadow-xl shadow-slate-900/10 border border-slate-800">
+        <div
+          className="absolute -right-10 -top-10 w-72 h-72 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"
+        />
+        <div
+          className="absolute right-1/3 -bottom-10 w-60 h-60 rounded-full bg-purple-500/15 blur-3xl pointer-events-none"
+        />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+          <div>
+            <div className="flex items-center gap-2.5 mb-1.5">
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold tracking-wide">
+                STORE OVERVIEW
+              </span>
+              <span className="text-[12px] text-slate-400 font-medium">
+                {todayLabel}
+              </span>
+            </div>
+            <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-white">
+              Welcome back, Admin 👋
+            </h1>
+            <p className="text-[13px] text-slate-300 mt-1 max-w-xl">
+              Here is your real-time store performance, sales momentum, and inventory health for today.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Link
+              to="/products"
+              className="btn bg-white/10 hover:bg-white/20 text-white border border-white/15 backdrop-blur-sm transition-all"
+            >
+              <PackageIcon className="w-4 h-4 text-indigo-300" />
+              <span>Manage Products</span>
+            </Link>
+            <Link
+              to="/orders"
+              className="btn btn-primary shadow-lg shadow-indigo-500/30"
+            >
+              <BagIcon className="w-4 h-4 text-white" />
+              <span>View All Orders</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* KPI Stat Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          title="Revenue"
+          title="Total Revenue"
           count={formatCurrency(stats.revenue, { compact: true })}
           accent="green"
-          hint="Excludes cancelled orders"
+          hint="Calculated across all paid orders"
           trend={stats.revenueTrend}
           icon={<RupeeIcon />}
         />
         <StatCard
-          title="Orders"
+          title="Total Orders"
           count={formatNumber(orders.length)}
-          accent="blue"
-          hint={`${stats.openOrders} open`}
+          accent="indigo"
+          hint={`${stats.openOrders} orders awaiting processing`}
           trend={stats.orderTrend}
           icon={<BagIcon />}
         />
         <StatCard
-          title="Products"
+          title="Active Products"
           count={formatNumber(products.length)}
-          accent="orange"
+          accent="purple"
           hint={
             lowStock.length
-              ? `${lowStock.length} need restocking`
-              : "Stock levels healthy"
+              ? `${lowStock.length} items running low on stock`
+              : "Inventory levels healthy"
           }
           icon={<PackageIcon />}
         />
         <StatCard
-          title="Customers"
+          title="Registered Customers"
           count={formatNumber(users.length)}
-          accent="slate"
-          hint={`${stats.newUsers} joined in 30 days`}
+          accent="blue"
+          hint={`${stats.newUsers} new signups in past 30 days`}
           icon={<UsersIcon />}
         />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 mb-4">
+      {/* Analytics & Pipeline Row */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
         <div className="xl:col-span-8">
           <RevenueChart data={series} />
         </div>
 
-        {/* Order pipeline */}
-        <div className="admin-card p-4 xl:col-span-4">
-          <div className="flex items-center justify-between mb-3.5">
-            <h2 className="admin-card-title">Order pipeline</h2>
-            <Link to="/orders" className="admin-link">
-              Manage
-            </Link>
-          </div>
-          {orders.length ? (
-            <div className="space-y-3">
-              {Object.entries(stats.statusCounts).map(([status, count]) => {
-                const pct = orders.length
-                  ? Math.round((count / orders.length) * 100)
-                  : 0;
-                return (
-                  <div key={status}>
-                    <div className="flex justify-between text-[12px] mb-1.5">
-                      <span className="font-medium text-(--ink-soft)">
-                        {status}
-                      </span>
-                      <span className="text-(--ink-muted) tabular-nums">
-                        {count} · {pct}%
-                      </span>
-                    </div>
-                    <div className="meter">
-                      <span
-                        style={{
-                          width: `${pct}%`,
-                          background: STATUS_BAR[status],
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
+        {/* Order Pipeline Widget */}
+        <div className="admin-card p-5 xl:col-span-4 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+              <div>
+                <h2 className="admin-card-title text-[15px]">Order Pipeline</h2>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Status breakdown of current sales</p>
+              </div>
+              <Link to="/orders" className="admin-link font-semibold">
+                Manage →
+              </Link>
             </div>
-          ) : (
-            <p className="text-[12.5px] text-(--ink-faint) py-6 text-center">
-              No orders to break down yet.
-            </p>
-          )}
+
+            {orders.length ? (
+              <div className="space-y-3 mt-3">
+                {Object.entries(stats.statusCounts).map(([status, count]) => {
+                  const pct = orders.length
+                    ? Math.round((count / orders.length) * 100)
+                    : 0;
+                  return (
+                    <div key={status} className="group">
+                      <div className="flex justify-between items-center text-[12.5px] mb-1.5 font-medium">
+                        <span className="text-slate-700 dark:text-slate-200 flex items-center gap-2">
+                          <span
+                            className="w-2 h-2 rounded-full ring-2 ring-white/10"
+                            style={{ background: STATUS_BAR[status] }}
+                          />
+                          <span className="font-semibold">{status}</span>
+                        </span>
+                        <span className="text-slate-600 dark:text-slate-300 tabular-nums font-bold text-[12px]">
+                          {count} <span className="font-medium text-slate-400 dark:text-slate-500">({pct}%)</span>
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800/80 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${pct}%`,
+                            background: STATUS_BAR[status],
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[13px] text-slate-400 dark:text-slate-500 py-8 text-center font-medium">
+                No orders recorded yet.
+              </p>
+            )}
+          </div>
+
+          <div className="pt-4 mt-5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
+            <span>Active Volume: <b className="text-slate-800 dark:text-slate-200">{stats.openOrders} orders</b></span>
+            <span className="font-bold text-indigo-600 dark:text-indigo-400">Avg Order: {formatCurrency(stats.avgOrder, { compact: true })}</span>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        {/* Low stock */}
-        <div className="admin-card xl:col-span-5 overflow-hidden">
+      {/* Tables Grid: Low Stock & Recent Orders */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
+        {/* Low Stock Alerts */}
+        <div className="admin-card xl:col-span-5 overflow-hidden flex flex-col">
           <div className="admin-card-header">
-            <h2 className="admin-card-title">Low stock inventory</h2>
+            <div>
+              <h2 className="admin-card-title">Inventory Alerts</h2>
+              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">Products requiring replenishment</p>
+            </div>
             <Link to="/products" className="admin-link">
-              View products
+              All Products
             </Link>
           </div>
           {lowStock.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto flex-1 admin-scroll">
               <table className="admin-table">
                 <thead>
                   <tr>
                     <th>Product</th>
                     <th>SKU</th>
-                    <th className="text-right">Stock</th>
+                    <th className="text-right">Units Left</th>
                   </tr>
                 </thead>
                 <tbody>
                   {lowStock.map((product) => (
-                    <tr key={product._id}>
+                    <tr key={product._id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                       <td className="max-w-50">
-                        <span className="cell-strong block truncate">
+                        <span className="cell-strong block truncate text-[13px]">
                           {product.name}
                         </span>
                       </td>
                       <td>
-                        <span className="code-chip">{product.sku || "—"}</span>
+                        <span className="code-chip font-mono text-[11px]">{product.sku || "—"}</span>
                       </td>
                       <td className="text-right">
                         <span
@@ -335,7 +374,8 @@ const DashboardPage = () => {
                               : "badge-warning"
                           }`}
                         >
-                          {product.stock ?? 0} left
+                          <span className="badge-dot" />
+                          {product.stock ?? 0} in stock
                         </span>
                       </td>
                     </tr>
@@ -344,29 +384,34 @@ const DashboardPage = () => {
               </table>
             </div>
           ) : (
-            <EmptyState
-              compact
-              icon={<CheckCircleIcon className="w-5 h-5" />}
-              title="Stock looks healthy"
-              message={`Nothing is down to ${LOW_STOCK} units or fewer.`}
-            />
+            <div className="p-8">
+              <EmptyState
+                compact
+                icon={<CheckCircleIcon className="w-6 h-6 text-emerald-600" />}
+                title="Stock is optimal"
+                message={`All product stocks are well above the warning threshold (${LOW_STOCK} units).`}
+              />
+            </div>
           )}
         </div>
 
-        {/* Recent orders */}
-        <div className="admin-card xl:col-span-7 overflow-hidden">
+        {/* Recent Orders */}
+        <div className="admin-card xl:col-span-7 overflow-hidden flex flex-col">
           <div className="admin-card-header">
-            <h2 className="admin-card-title">Recent orders</h2>
+            <div>
+              <h2 className="admin-card-title">Recent Transactions</h2>
+              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">Latest incoming customer orders</p>
+            </div>
             <Link to="/orders" className="admin-link">
-              View all
+              View All Orders
             </Link>
           </div>
           {recentOrders.length > 0 ? (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto flex-1 admin-scroll">
               <table className="admin-table">
                 <thead>
                   <tr>
-                    <th>Order</th>
+                    <th>Order ID</th>
                     <th>Customer</th>
                     <th>Date</th>
                     <th className="text-right">Amount</th>
@@ -375,26 +420,33 @@ const DashboardPage = () => {
                 </thead>
                 <tbody>
                   {recentOrders.map((order) => (
-                    <tr key={order._id}>
+                    <tr key={order._id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                       <td>
                         <Link
                           to="/orders"
-                          className="font-mono text-[12px] font-semibold text-(--ink) hover:text-(--brand)"
+                          className="font-mono text-[12px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
                         >
                           {shortId(order._id)}
                         </Link>
                       </td>
                       <td className="max-w-40">
-                        <span className="cell-strong block truncate">
-                          {typeof order.user === "object"
-                            ? order.user?.name || "—"
-                            : "—"}
-                        </span>
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 text-white text-[10.5px] font-bold flex items-center justify-center shrink-0 shadow-xs">
+                            {typeof order.user === "object" && order.user?.name
+                              ? order.user.name.charAt(0).toUpperCase()
+                              : "C"}
+                          </div>
+                          <span className="cell-strong block truncate text-[12.5px]">
+                            {typeof order.user === "object"
+                              ? order.user?.name || "Customer"
+                              : "Customer"}
+                          </span>
+                        </div>
                       </td>
-                      <td className="text-(--ink-muted) whitespace-nowrap">
+                      <td className="text-slate-500 dark:text-slate-400 text-[12px] whitespace-nowrap">
                         {formatDate(order.createdAt || order.orderDate)}
                       </td>
-                      <td className="text-right font-semibold tabular-nums">
+                      <td className="text-right font-bold text-(--ink) tabular-nums text-[13px]">
                         {formatCurrency(order.totalAmount)}
                       </td>
                       <td>
@@ -413,12 +465,14 @@ const DashboardPage = () => {
               </table>
             </div>
           ) : (
-            <EmptyState
-              compact
-              icon={<BagIcon className="w-5 h-5" />}
-              title="No orders yet"
-              message="Orders will appear here as soon as customers check out."
-            />
+            <div className="p-8">
+              <EmptyState
+                compact
+                icon={<BagIcon className="w-6 h-6 text-indigo-600" />}
+                title="No orders yet"
+                message="Transactions will appear here as soon as customers checkout."
+              />
+            </div>
           )}
         </div>
       </div>

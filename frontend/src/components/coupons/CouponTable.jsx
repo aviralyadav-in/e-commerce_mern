@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { deleteCoupon } from "../../features/coupons/couponsSlice";
 import useTableControls from "../../hooks/useTableControls";
@@ -8,14 +8,7 @@ import Pagination from "../common/Pagination";
 import SortableTh from "../common/SortableTh";
 import { formatCurrency, formatDate } from "../../utils/format";
 import { TagIcon, PencilIcon, TrashIcon, PlusIcon } from "../common/Icon";
-
-export const isExpired = (date) => !!date && new Date(date) < new Date();
-
-/** A coupon is only usable when it is switched on AND still in date. */
-export const couponState = (coupon) => {
-  if (isExpired(coupon.expiryDate)) return "expired";
-  return coupon.isActive ? "active" : "paused";
-};
+import { couponState } from "../../utils/coupon";
 
 const STATE_BADGE = {
   active: { className: "badge-success", label: "Active" },
@@ -98,36 +91,41 @@ const CouponTable = ({ coupons, onEdit, onCreate }) => {
                   const expired = state === "expired";
 
                   return (
-                    <tr key={coupon._id}>
+                    <tr key={coupon._id} className="hover:bg-slate-50/80 transition-colors">
                       <td>
-                        <span className="code-chip">{coupon.code}</span>
-                      </td>
-                      <td>
-                        <p className="cell-strong">
-                          {coupon.discountType === "percentage"
-                            ? `${coupon.discountValue}% off`
-                            : `${formatCurrency(coupon.discountValue)} off`}
-                        </p>
-                        <span className="cell-sub capitalize">
-                          {coupon.discountType === "percentage"
-                            ? "Percentage"
-                            : "Flat amount"}
+                        <span className="code-chip font-bold text-indigo-700 bg-indigo-50/80 border-indigo-200">
+                          {coupon.code}
                         </span>
                       </td>
-                      <td className="text-right whitespace-nowrap">
-                        {coupon.minOrderValue
+                      <td>
+                        <p className="cell-strong text-slate-900 font-bold">
+                          {coupon.discountType === "percentage"
+                            ? `${coupon.discountValue}% OFF`
+                            : `${formatCurrency(coupon.discountValue)} OFF`}
+                        </p>
+                        <span className="cell-sub capitalize text-slate-400 text-[11px]">
+                          {coupon.discountType || "percentage"} discount
+                        </span>
+                      </td>
+                      <td className="text-right whitespace-nowrap font-medium text-slate-700">
+                        {coupon.minOrderValue > 0
                           ? formatCurrency(coupon.minOrderValue)
-                          : "—"}
+                          : "No minimum"}
                       </td>
                       <td className="whitespace-nowrap">
                         <span
-                          className={expired ? "text-red-600 font-medium" : ""}
+                          className={`text-[12.5px] ${
+                            expired
+                              ? "text-rose-600 font-semibold"
+                              : "text-slate-600"
+                          }`}
                         >
-                          {formatDate(coupon.expiryDate)}
+                          {coupon.expiryDate ? formatDate(coupon.expiryDate) : "Never"}
                         </span>
                       </td>
                       <td>
-                        <span className={`badge badge-dot ${badge.className}`}>
+                        <span className={`badge ${badge.className}`}>
+                          <span className="badge-dot" />
                           {badge.label}
                         </span>
                       </td>
@@ -135,17 +133,17 @@ const CouponTable = ({ coupons, onEdit, onCreate }) => {
                         <div className="flex justify-end gap-1.5">
                           <button
                             onClick={() => onEdit(coupon)}
+                            className="icon-btn icon-btn-edit"
                             title="Edit coupon"
                             aria-label={`Edit ${coupon.code}`}
-                            className="icon-btn icon-btn-edit"
                           >
                             <PencilIcon className="w-3.5 h-3.5" />
                           </button>
                           <button
                             onClick={() => setDeleteTarget(coupon)}
+                            className="icon-btn icon-btn-delete"
                             title="Delete coupon"
                             aria-label={`Delete ${coupon.code}`}
-                            className="icon-btn icon-btn-delete"
                           >
                             <TrashIcon className="w-3.5 h-3.5" />
                           </button>

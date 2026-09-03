@@ -1,4 +1,3 @@
-import React from "react";
 
 /**
  * Segmented status filter. Options: [{ value, label, count }].

@@ -8,6 +8,13 @@ const objectIdValidation = z
 // Cart ke andar 'items' array ka schema
 const cartItemSchema = z.object({
   product: objectIdValidation,
+  // 🆕 Variant snapshot — null/undefined = plain product (no variant)
+  variantName: z
+    .string({ error: "Variant name must be a string" })
+    .trim()
+    .max(60, "Variant name cannot exceed 60 characters")
+    .nullable()
+    .optional(),
   quantity: z
     .number({ error: "Quantity is required and must be a number" })
     .int("Quantity must be an integer")

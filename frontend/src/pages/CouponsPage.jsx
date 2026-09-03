@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCoupons } from "../features/coupons/couponsSlice";
 import { exportAllCouponsToExcel } from "../utils/exportProductToExcel";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
-import CouponTable, { couponState } from "../components/coupons/CouponTable";
+import CouponTable from "../components/coupons/CouponTable";
+import { couponState } from "../utils/coupon";
 import CouponModal from "../components/coupons/CouponModal";
 import PageHeader from "../components/common/PageHeader";
 import SearchInput from "../components/common/SearchInput";
@@ -64,7 +65,7 @@ const CouponsPage = () => {
 
   const handleExportAll = () => {
     if (!coupons.length) {
-      dispatch(toastInfo("Nothing to export", "Create a coupon first."));
+      notifyInfo("Nothing to export", "Create a coupon first.");
       return;
     }
     exportAllCouponsToExcel(coupons);

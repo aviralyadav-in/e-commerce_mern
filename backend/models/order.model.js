@@ -19,6 +19,12 @@ const orderSchema = new mongoose.Schema(
           ref: "Product",
           required: true,
         },
+        // 🆕 Variant snapshot — order history me color dikhe
+        variantName: {
+          type: String,
+          default: null,
+          trim: true,
+        },
         quantity: {
           type: Number,
           required: true,

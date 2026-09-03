@@ -32,6 +32,7 @@ productRouter.post(
   productUpload.fields([
     { name: "desktopImages", maxCount: 5 },
     { name: "mobileImages", maxCount: 5 },
+    { name: "variantImages", maxCount: 20 }, // 🆕 Color variant images
   ]),
   createProduct,
 );
@@ -42,6 +43,7 @@ productRouter.put(
   productUpload.fields([
     { name: "desktopImages", maxCount: 5 },
     { name: "mobileImages", maxCount: 5 },
+    { name: "variantImages", maxCount: 20 }, // 🆕 Color variant images
   ]),
   updateProduct,
 );

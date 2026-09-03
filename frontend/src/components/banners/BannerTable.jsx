@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch } from "react-redux";
 import { deleteBanner } from "../../features/banners/bannersSlice";
 import useTableControls from "../../hooks/useTableControls";
@@ -18,6 +18,12 @@ const ACCESSORS = {
 const BannerTable = ({ banners, onEdit, onCreate }) => {
   const dispatch = useDispatch();
   const [deleteTarget, setDeleteTarget] = useState(null);
+
+  const PAGE_LABELS = { home: "Home", shop: "Shop", wishlist: "Wishlist" };
+  const POSITION_LABELS = {
+    "after-hero": "After hero",
+    "after-products": "After products",
+  };
 
   const table = useTableControls(banners, {
     accessors: ACCESSORS,
@@ -45,6 +51,7 @@ const BannerTable = ({ banners, onEdit, onCreate }) => {
                   sort={table.sort}
                   onSort={table.toggleSort}
                 />
+                <th scope="col">Page / Slot</th>
                 <SortableTh
                   label="Status"
                   sortKey="status"
@@ -66,56 +73,68 @@ const BannerTable = ({ banners, onEdit, onCreate }) => {
             <tbody>
               {table.rows.length > 0 ? (
                 table.rows.map((banner) => (
-                  <tr key={banner._id}>
-                    <td className="w-35">
+                  <tr key={banner._id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="w-36">
                       <Thumb
                         src={banner.image}
                         alt={banner.title}
                         className="w-24 h-12"
+                        rounded="rounded-xl"
                       />
                     </td>
                     <td>
-                      <p className="cell-strong truncate max-w-70">
+                      <p className="cell-strong truncate max-w-70 text-[13px]">
                         {banner.title}
                       </p>
                       {banner.subtitle && (
-                        <span className="cell-sub truncate max-w-70">
+                        <span className="cell-sub truncate max-w-70 text-slate-500 text-[11.5px]">
                           {banner.subtitle}
                         </span>
                       )}
                       {banner.linkUrl && (
-                        <span className="cell-sub truncate max-w-70 text-(--brand)">
+                        <span className="cell-sub truncate max-w-70 text-indigo-600 font-medium text-[11px]">
                           {banner.linkUrl}
                         </span>
                       )}
                     </td>
                     <td>
+                      <span className="badge badge-info capitalize font-semibold">
+                        {PAGE_LABELS[banner.page] || banner.page || "Home"}
+                      </span>
+                      {banner.position && (
+                        <span className="cell-sub text-slate-400 text-[11px] mt-1">
+                          {POSITION_LABELS[banner.position] || banner.position}
+                        </span>
+                      )}
+                    </td>
+                    <td>
                       <span
-                        className={`badge badge-dot ${
+                        className={`badge ${
                           banner.isActive ? "badge-success" : "badge-neutral"
                         }`}
                       >
+                        <span className="badge-dot" />
                         {banner.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="text-right">
-                      <span className="code-chip">{banner.sortOrder || 0}</span>
+                    <td className="text-right font-mono font-bold text-slate-800 text-[12.5px]">
+                      #{banner.sortOrder ?? 0}
                     </td>
                     <td className="text-right">
                       <div className="flex justify-end gap-1.5">
                         <button
                           onClick={() => onEdit(banner)}
+                          className="icon-btn icon-btn-edit"
                           title="Edit banner"
                           aria-label={`Edit ${banner.title}`}
-                          className="icon-btn icon-btn-edit"
                         >
                           <PencilIcon className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => setDeleteTarget(banner)}
+                          className="icon-btn icon-btn-delete"
                           title="Delete banner"
                           aria-label={`Delete ${banner.title}`}
-                          className="icon-btn icon-btn-delete"
                         >
                           <TrashIcon className="w-3.5 h-3.5" />
                         </button>
@@ -125,11 +144,11 @@ const BannerTable = ({ banners, onEdit, onCreate }) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="empty-cell">
+                  <td colSpan="6" className="empty-cell">
                     <EmptyState
                       icon={<ImageIcon className="w-5 h-5" />}
                       title="No banners yet"
-                      message="Banners appear on the storefront home page. Add one to promote a collection or sale."
+                      message="Banners appear on the storefront (home, shop or wishlist page). Add one to promote a collection or sale."
                       action={
                         onCreate && (
                           <button

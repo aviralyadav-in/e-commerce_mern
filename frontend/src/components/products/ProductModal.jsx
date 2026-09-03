@@ -4,10 +4,11 @@ import {
   addProduct,
   updateProduct,
 } from "../../features/products/productsSlice";
+import useFormSync from "../../hooks/useFormSync";
 import { getAssetUrl } from "../../utils/assetUrl";
 import Drawer from "../common/Drawer";
 import { Field, FormAlert } from "../common/Field";
-import { CheckIcon, ImageIcon, PackageIcon, XIcon } from "../common/Icon";
+import { CheckIcon, ImageIcon, PackageIcon, PlusIcon, XIcon } from "../common/Icon";
 
 const MAX_IMAGES = 5;
 
@@ -28,6 +29,8 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
   const [isNewArrival, setIsNewArrival] = useState(false);
   const [existingImages, setExistingImages] = useState([]);
   const [newImages, setNewImages] = useState([]);
+  // 🆕 Color variants — { name, images (retained URLs), newFiles: [{file, preview, id}] }
+  const [variants, setVariants] = useState([]);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
@@ -39,48 +42,68 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     ? [...new Set(selectedCategory.subCategories)]
     : ["Men", "Women"];
 
-  useEffect(() => {
-    if (editData) {
-      setName(editData.name || editData.title || "");
-      setDescription(editData.description || "");
-      setPrice(editData.price || "");
-      setStock(editData.stock || "");
-      setStatus(editData.isActive !== false ? "In Stock" : "Out of Stock");
-      setCategoryId(editData.categoryId?._id || editData.categoryId || "");
-      // Purane products agar 'Unisex' the to bhi ab valid option hi pre-select ho
-      setSubCategory(
-        ["Men", "Women"].includes(editData.subCategory)
-          ? editData.subCategory
-          : "Men",
-      );
-      setIsFeatured(!!editData.isFeatured);
-      setIsBestSeller(!!editData.isBestSeller);
-      setIsNewArrival(!!editData.isNewArrival);
-      setExistingImages(editData.images?.desktop || []);
-      setNewImages([]);
-    } else {
-      setName("");
-      setDescription("");
-      setPrice("");
-      setStock("");
-      setStatus("In Stock");
-      setCategoryId(categories.length > 0 ? categories[0]._id : "");
-      setSubCategory("Men");
-      setIsFeatured(false);
-      setIsBestSeller(false);
-      setIsNewArrival(false);
-      setExistingImages([]);
-      setNewImages([]);
-    }
-    setErrors({});
-    setTouched({});
-  }, [editData, isOpen, categories]);
+  // Re-seed form state whenever the drawer opens for a different record,
+  // or when categories finish loading (create-mode default category).
+  // Render-phase sync via useFormSync — replaces the old setState-in-effect.
+  useFormSync(
+    `${isOpen}|${editData?._id ?? ""}|${categories.length}`,
+    () => {
+      if (editData) {
+        setName(editData.name || editData.title || "");
+        setDescription(editData.description || "");
+        setPrice(editData.price || "");
+        setStock(editData.stock || "");
+        setStatus(editData.isActive !== false ? "In Stock" : "Out of Stock");
+        setCategoryId(editData.categoryId?._id || editData.categoryId || "");
+        // Purane products agar 'Unisex' the to bhi ab valid option hi pre-select ho
+        setSubCategory(
+          ["Men", "Women"].includes(editData.subCategory)
+            ? editData.subCategory
+            : "Men",
+        );
+        setIsFeatured(!!editData.isFeatured);
+        setIsBestSeller(!!editData.isBestSeller);
+        setIsNewArrival(!!editData.isNewArrival);
+        setExistingImages(editData.images?.desktop || []);
+        setNewImages([]);
+        setVariants(
+          (editData.variants || []).map((v) => ({
+            name: v.name || "",
+            images: v.images || [],
+            newFiles: [],
+          })),
+        );
+      } else {
+        setName("");
+        setDescription("");
+        setPrice("");
+        setStock("");
+        setStatus("In Stock");
+        setCategoryId(categories.length > 0 ? categories[0]._id : "");
+        setSubCategory("Men");
+        setIsFeatured(false);
+        setIsBestSeller(false);
+        setIsNewArrival(false);
+        setExistingImages([]);
+        setNewImages([]);
+        setVariants([]);
+      }
+      setErrors({});
+      setTouched({});
+    },
+  );
 
+  // Object URLs live outside React — free them with a proper cleanup when the
+  // modal closes or when a draft image is swapped out.
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen) return undefined;
+    return () => {
       newImages.forEach((img) => URL.revokeObjectURL(img.preview));
-    }
-  }, [isOpen]);
+      variants.forEach((v) =>
+        (v.newFiles || []).forEach((img) => URL.revokeObjectURL(img.preview)),
+      );
+    };
+  }, [isOpen, newImages, variants]);
 
   const getImageError = (existing = existingImages, newImgs = newImages) => {
     const count = existing.length + newImgs.length;
@@ -116,6 +139,14 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
 
     const imageErr = getImageError();
     if (imageErr) errs.images = imageErr;
+
+    // 🆕 Variant validation — names unique hone chahiye
+    const vNames = variants
+      .map((v) => v.name.trim().toLowerCase())
+      .filter(Boolean);
+    if (new Set(vNames).size !== vNames.length) {
+      errs.variants = "Variant names must be unique.";
+    }
 
     return errs;
   };
@@ -194,6 +225,55 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     }
   };
 
+  /* 🆕 Color variant row handlers */
+  const addVariantRow = () =>
+    setVariants((prev) => [...prev, { name: "", images: [], newFiles: [] }]);
+
+  const removeVariantRow = (index) => {
+    setVariants((prev) => {
+      const row = prev[index];
+      (row?.newFiles || []).forEach((img) => URL.revokeObjectURL(img.preview));
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const updateVariantRow = (index, patch) =>
+    setVariants((prev) =>
+      prev.map((v, i) => (i === index ? { ...v, ...patch } : v)),
+    );
+
+  const addVariantImages = (index, files) => {
+    const valid = files.filter((f) => f.type.startsWith("image/"));
+    if (!valid.length) return;
+    const added = valid.map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+      id: `${file.name}-${Date.now()}-${Math.random()}`,
+    }));
+    setVariants((prev) =>
+      prev.map((v, i) =>
+        i === index ? { ...v, newFiles: [...(v.newFiles || []), ...added] } : v,
+      ),
+    );
+  };
+
+  const removeVariantImage = (index, kind, value) => {
+    setVariants((prev) =>
+      prev.map((v, i) => {
+        if (i !== index) return v;
+        if (kind === "existing") {
+          return { ...v, images: v.images.filter((u) => u !== value) };
+        }
+        const target = (v.newFiles || []).find((f) => f.id === value);
+        if (target) URL.revokeObjectURL(target.preview);
+        return {
+          ...v,
+          newFiles: (v.newFiles || []).filter((f) => f.id !== value),
+        };
+      }),
+    );
+  };
+
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
   const handleSubmit = (e) => {
@@ -228,6 +308,22 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     }
 
     newImages.forEach((img) => formData.append("desktopImages", img.file));
+
+    // 🆕 Variants — rows JSON + nayi files row-order me 'variantImages' field me
+    const cleanedVariants = variants.filter((v) => v.name.trim());
+    formData.append(
+      "variants",
+      JSON.stringify(
+        cleanedVariants.map((v) => ({
+          name: v.name.trim(),
+          images: v.images,
+          newImageCount: v.newFiles.length,
+        })),
+      ),
+    );
+    cleanedVariants.forEach((v) => {
+      v.newFiles.forEach((img) => formData.append("variantImages", img.file));
+    });
 
     if (editData) {
       formData.append("retainedDesktopImages", JSON.stringify(existingImages));
@@ -493,6 +589,108 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
             <option value="In Stock">Live on storefront</option>
             <option value="Out of Stock">Hidden</option>
           </select>
+        </Field>
+
+        {/* 🆕 Color variants — niyabags live site jaisa */}
+        <Field
+          label="Color variants"
+          optional
+          error={err("variants")}
+          hint="Jaise Black / Brown — har variant ki apni images. Price & stock product-level par hi rehte hain."
+        >
+          {variants.length > 0 && (
+            <div className="space-y-3">
+              {variants.map((v, i) => (
+                <div
+                  key={i}
+                  className="rounded-(--radius) border border-(--border) bg-(--surface-sunken) p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={v.name}
+                      onChange={(e) =>
+                        updateVariantRow(i, { name: e.target.value })
+                      }
+                      placeholder="Variant name e.g. Black"
+                      className="form-input flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeVariantRow(i)}
+                      className="icon-btn icon-btn-delete"
+                      title="Remove variant"
+                      aria-label={`Remove variant ${v.name || i + 1}`}
+                    >
+                      <XIcon className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {(v.images.length > 0 || v.newFiles.length > 0) && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {v.images.map((url) => (
+                        <div key={url} className="relative">
+                          <img
+                            src={getAssetUrl(url)}
+                            alt=""
+                            className="h-12 w-12 rounded border border-(--border) object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeVariantImage(i, "existing", url)}
+                            className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+                            title="Remove image"
+                            aria-label="Remove variant image"
+                          >
+                            <XIcon className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {v.newFiles.map((img) => (
+                        <div key={img.id} className="relative">
+                          <img
+                            src={img.preview}
+                            alt=""
+                            className="h-12 w-12 rounded border border-(--border) object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeVariantImage(i, "new", img.id)}
+                            className="absolute -right-1 -top-1 rounded-full bg-red-500 p-0.5 text-white"
+                            title="Remove image"
+                            aria-label="Remove variant image"
+                          >
+                            <XIcon className="w-2.5 h-2.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <label className="mt-2 inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-(--brand)">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        addVariantImages(i, Array.from(e.target.files || []));
+                        e.target.value = "";
+                      }}
+                    />
+                    <ImageIcon className="w-3.5 h-3.5" /> Add images
+                  </label>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={addVariantRow}
+            className="btn btn-secondary btn-sm mt-2"
+          >
+            <PlusIcon className="w-3.5 h-3.5" /> Add variant
+          </button>
         </Field>
 
         <Field

@@ -47,4 +47,19 @@ export const bannerValidationSchema = z.object({
     })
     .optional()
     .default(true),
+
+  // 🆕 Multi-page promo — kis page par, kahan dikhe
+  page: z
+    .enum(["home", "shop", "wishlist"], {
+      error: "Page must be home, shop, or wishlist",
+    })
+    .optional()
+    .default("home"),
+
+  position: z
+    .enum(["after-hero", "after-products"], {
+      error: "Position must be after-hero or after-products",
+    })
+    .optional()
+    .default("after-hero"),
 });

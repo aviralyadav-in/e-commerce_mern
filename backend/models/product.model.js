@@ -112,6 +112,24 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+
+    // 🆕 Color variants — jaise Black / Brown, har variant ki apni images.
+    // Simple model: price/stock product-level par hi rehte hain (live
+    // niyabags reference jaisa hi). Empty array = no variants.
+    variants: [
+      {
+        name: {
+          type: String,
+          required: [true, "Variant name is required"],
+          trim: true,
+          maxlength: [60, "Variant name cannot exceed 60 characters"],
+        },
+        images: {
+          type: [String],
+          default: [],
+        },
+      },
+    ],
   },
   {
     timestamps: true,

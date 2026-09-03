@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { Navigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 import { checkAuth } from "../../features/auth/authSlice";

@@ -1,4 +1,7 @@
-import React from "react";
+/* eslint-disable react-refresh/only-export-components --
+   Icons are built via the make() factory below; every export IS a component,
+   so fast refresh works, but the rule cannot see through the factory call.
+   Rewriting ~50 icons by hand just to satisfy the heuristic would be noise. */
 
 /**
  * Central icon set so every screen draws the same glyphs at the same weight.
@@ -48,6 +51,24 @@ export const EyeIcon = make(
   <>
     <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" />
     <circle cx="12" cy="12" r="2.75" />
+  </>,
+);
+export const EyeOffIcon = make(
+  <>
+    <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </>,
+);
+export const LockIcon = make(
+  <>
+    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+    <path d="M7 11V7a5 5 0 0110 0v4" />
+  </>,
+);
+export const ShieldCheckIcon = make(
+  <>
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    <path d="M9 12l2 2 4-4" />
   </>,
 );
 export const DownloadIcon = make(p("M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"));
@@ -232,4 +253,17 @@ export const InboxIcon = make(
   p(
     "M3.5 13h4l1.2 2.2h6.6L16.5 13h4M3.5 13l2.4-7.2A2 2 0 017.8 4.5h8.4a2 2 0 011.9 1.3L20.5 13v4.5a2 2 0 01-2 2h-13a2 2 0 01-2-2V13z",
   ),
+);
+
+export const SunIcon = make(
+  <>
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+  </>,
+  2,
+);
+
+export const MoonIcon = make(
+  <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />,
+  2,
 );

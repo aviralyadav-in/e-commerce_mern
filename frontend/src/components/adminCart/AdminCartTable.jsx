@@ -1,4 +1,3 @@
-import React from "react";
 import useTableControls from "../../hooks/useTableControls";
 import EmptyState from "../common/EmptyState";
 import Pagination from "../common/Pagination";
@@ -71,53 +70,52 @@ const AdminCartTable = ({ carts }) => {
             </tr>
           </thead>
           <tbody>
-            {table.rows.length > 0 ? (
-              table.rows.map((item) => (
-                <tr key={item._id}>
-                  <td>
-                    <div className="flex items-center gap-2.5">
-                      <div className="avatar w-7 h-7 text-[10.5px] bg-blue-50! text-blue-700!">
-                        {initials(item.userName)}
+              {table.rows.length > 0 ? (
+                table.rows.map((item) => (
+                  <tr key={item._id} className="hover:bg-slate-50/80 transition-colors">
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-blue-100 shadow-xs">
+                          {initials(item.userName)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="cell-strong truncate max-w-45 text-[13px]">
+                            {item.userName || "Customer"}
+                          </p>
+                          <span className="cell-sub truncate max-w-45 text-slate-400 text-[11px]">
+                            {item.userEmail || "Active Cart User"}
+                          </span>
+                        </div>
                       </div>
-                      <div className="min-w-0">
-                        <p className="cell-strong truncate max-w-40">
-                          {item.userName || "Unknown"}
-                        </p>
-                        <span className="cell-sub truncate max-w-40">
-                          {item.userEmail || "—"}
+                    </td>
+                    <td>
+                      <div className="flex items-center gap-3">
+                        <Thumb
+                          src={item.productImage}
+                          alt={item.productName}
+                          className="w-9 h-9"
+                          rounded="rounded-xl"
+                        />
+                        <span className="cell-strong truncate max-w-50 text-[13px]">
+                          {item.productName || "Product item"}
                         </span>
                       </div>
-                    </div>
-                  </td>
-                  <td>
-                    <div className="flex items-center gap-2.5">
-                      <Thumb
-                        src={item.productImage}
-                        alt={item.productName}
-                        className="w-8 h-8"
-                      />
-                      <span className="cell-strong truncate max-w-50">
-                        {item.productName || "—"}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="text-right whitespace-nowrap">
-                    {formatCurrency(item.productPrice)}
-                  </td>
-                  <td className="text-right">
-                    <span className="badge badge-neutral">
-                      ×{item.quantity}
-                    </span>
-                  </td>
-                  <td className="text-right whitespace-nowrap cell-strong">
-                    {formatCurrency(item.itemTotal)}
-                  </td>
-                  <td className="whitespace-nowrap">
-                    {formatDate(item.addedAt)}
-                  </td>
-                </tr>
-              ))
-            ) : (
+                    </td>
+                    <td className="text-right whitespace-nowrap text-slate-600 font-medium text-[13px]">
+                      {formatCurrency(item.productPrice)}
+                    </td>
+                    <td className="text-right whitespace-nowrap font-bold text-slate-900 tabular-nums text-[13px]">
+                      {item.quantity}
+                    </td>
+                    <td className="text-right whitespace-nowrap font-extrabold text-slate-900 tabular-nums text-[13.5px]">
+                      {formatCurrency(item.itemTotal)}
+                    </td>
+                    <td className="whitespace-nowrap text-slate-500 text-[12px]">
+                      {item.addedAt ? formatDate(item.addedAt) : "Recently"}
+                    </td>
+                  </tr>
+                ))
+              ) : (
               <tr>
                 <td colSpan="6" className="empty-cell">
                   <EmptyState

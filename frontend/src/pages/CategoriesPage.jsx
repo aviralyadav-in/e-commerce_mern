@@ -6,7 +6,7 @@ import {
 } from "../features/categories/categoriesSlice";
 import { exportAllCategoriesToExcel } from "../utils/exportProductToExcel";
 import { downloadCategoriesSampleCsv } from "../utils/csvTemplates";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import CategoryTable from "../components/categories/CategoryTable";
 import CategoryModal from "../components/categories/CategoryModal";
@@ -73,7 +73,7 @@ const CategoriesPage = () => {
 
   const handleExportAll = () => {
     if (!categories.length) {
-      dispatch(toastInfo("Nothing to export", "Add a category first."));
+      notifyInfo("Nothing to export", "Add a category first.");
       return;
     }
     exportAllCategoriesToExcel(categories);

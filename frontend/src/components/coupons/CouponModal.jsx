@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import useFormSync from "../../hooks/useFormSync";
 import { addCoupon, updateCoupon } from "../../features/coupons/couponsSlice";
 import Drawer from "../common/Drawer";
 import { Field, FormAlert } from "../common/Field";
@@ -19,7 +20,9 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  useEffect(() => {
+  // Re-seed form state whenever the drawer opens for a different record.
+  // (Render-phase sync via useFormSync — replaces the old setState-in-effect.)
+  useFormSync(`${isOpen}|${editData?._id ?? ""}`, () => {
     if (editData) {
       setCode(editData.code || "");
       setDiscountType(editData.discountType || "percentage");
@@ -41,7 +44,7 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
     }
     setErrors({});
     setTouched({});
-  }, [editData, isOpen]);
+  });
 
   const validate = (fields = {}) => {
     const errs = {};

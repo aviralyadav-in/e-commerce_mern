@@ -120,7 +120,7 @@ const addressSchema = new mongoose.Schema(
 );
 
 // 🚨 CRITICAL: Ensure ONLY ONE default address per user (save par)
-addressSchema.pre("save", async function (next) {
+addressSchema.pre("save", async function () {
   if (this.isDefault) {
     await this.constructor.updateMany(
       {
@@ -132,33 +132,27 @@ addressSchema.pre("save", async function (next) {
       },
     );
   }
-  next();
 });
 
 // For findOneAndUpdate operations — $set-wrapped ya flat update dono handle karo
-addressSchema.pre("findOneAndUpdate", async function (next) {
-  try {
-    const update = this.getUpdate() || {};
-    const payload = update.$set ?? update;
+addressSchema.pre("findOneAndUpdate", async function () {
+  const update = this.getUpdate() || {};
+  const payload = update.$set ?? update;
 
-    if (payload.isDefault === true) {
-      // Query se document nikalo (query sirf _id ho, ye zaroori nahi)
-      const doc = await this.model.findOne(this.getQuery()).select("user _id");
-      if (doc) {
-        await this.model.updateMany(
-          {
-            user: doc.user,
-            _id: { $ne: doc._id },
-          },
-          {
-            $set: { isDefault: false },
-          },
-        );
-      }
+  if (payload.isDefault === true) {
+    // Query se document nikalo (query sirf _id ho, ye zaroori nahi)
+    const doc = await this.model.findOne(this.getQuery()).select("user _id");
+    if (doc) {
+      await this.model.updateMany(
+        {
+          user: doc.user,
+          _id: { $ne: doc._id },
+        },
+        {
+          $set: { isDefault: false },
+        },
+      );
     }
-    next();
-  } catch (error) {
-    next(error);
   }
 });
 
@@ -174,4 +168,3 @@ addressSchema.index({ user: 1, isDefault: 1 });
 // Named + Default dono exports (controllers named use karte hain)
 export const Address = mongoose.model("Address", addressSchema);
 export default Address;
-

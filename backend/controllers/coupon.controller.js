@@ -170,7 +170,7 @@ export const updateCoupon = async (req, res) => {
     const updatedCoupon = await Coupon.findByIdAndUpdate(
       id,
       { $set: updateData },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
 
     return res.status(200).json({

@@ -85,8 +85,9 @@ export const updateProfileSchema = z.object({
     })
     .optional(),
 
-  avatar: z.string().optional(),
-
+  // 🛠️ FIX: avatar field hata di gayi — profile update se arbitrary
+  // avatar string set karna block ho gaya. Avatar ab sirf dedicated
+  // PUT /api/auth/profile/avatar (multer upload) endpoint se hi set hoga.
   gender: z.enum(["male", "female"]).optional(),
 
   dateOfBirth: z

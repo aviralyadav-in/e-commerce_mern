@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 const compare = (a, b) => {
   if (a == null && b == null) return 0;
@@ -38,12 +38,16 @@ const useTableControls = (
   const total = sorted.length;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
 
-  // Filtering can shrink the list under the current page; clamp back in range.
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount);
-  }, [page, pageCount]);
-
   const safePage = Math.min(page, pageCount);
+
+  /**
+   * Exposed setter clamps every jump into range up-front (filters can shrink
+   * the dataset), so a stale large page never resurfaces when rows grow back.
+   */
+  const goToPage = useCallback(
+    (p) => setPage(Math.max(1, Math.min(p, pageCount))),
+    [pageCount],
+  );
   const start = (safePage - 1) * pageSize;
 
   const pageRows = useMemo(
@@ -72,7 +76,7 @@ const useTableControls = (
     page: safePage,
     pageCount,
     pageSize,
-    setPage,
+    setPage: goToPage,
     setPageSize: changePageSize,
     total,
     rangeStart: total === 0 ? 0 : start + 1,

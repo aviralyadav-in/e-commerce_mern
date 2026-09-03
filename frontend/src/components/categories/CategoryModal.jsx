@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   addCategory,
   updateCategory,
 } from "../../features/categories/categoriesSlice";
+import useFormSync from "../../hooks/useFormSync";
 import Drawer from "../common/Drawer";
 import { Field, FormAlert } from "../common/Field";
 import Thumb from "../common/Thumb";
@@ -22,7 +23,9 @@ const CategoryModal = ({ isOpen, onClose, editData }) => {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  useEffect(() => {
+  // Re-seed form state whenever the drawer opens for a different record.
+  // (Render-phase sync via useFormSync — replaces the old setState-in-effect.)
+  useFormSync(`${isOpen}|${editData?._id ?? ""}`, () => {
     if (editData) {
       setName(editData.name);
       setDescription(editData.description);
@@ -40,7 +43,7 @@ const CategoryModal = ({ isOpen, onClose, editData }) => {
     }
     setErrors({});
     setTouched({});
-  }, [editData, isOpen]);
+  });
 
   const validate = (fields = {}) => {
     const errs = {};

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import { getAssetUrl } from "../../utils/assetUrl";
 import { ImageIcon } from "./Icon";
 
@@ -18,10 +18,13 @@ const Thumb = ({
 }) => {
   const url = getAssetUrl(src);
   const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
+  // Reset the error flag whenever the image target changes — done during
+  // render (React's adjust-state-on-prop-change pattern) instead of an effect.
+  const [prevUrl, setPrevUrl] = useState(url);
+  if (prevUrl !== url) {
+    setPrevUrl(url);
     setFailed(false);
-  }, [url]);
+  }
 
   const frame = `${className} ${rounded} shrink-0 border border-[var(--border)] overflow-hidden bg-[var(--surface-sunken)]`;
 

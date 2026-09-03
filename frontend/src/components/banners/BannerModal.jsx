@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { addBanner, updateBanner } from "../../features/banners/bannersSlice";
+import useFormSync from "../../hooks/useFormSync";
 import Drawer from "../common/Drawer";
 import { Field, FormAlert } from "../common/Field";
 import Thumb from "../common/Thumb";
@@ -15,17 +16,24 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
   const [linkUrl, setLinkUrl] = useState("");
   const [sortOrder, setSortOrder] = useState(0);
   const [isActive, setIsActive] = useState(true);
+  // 🆕 Multi-page promo — kis page par, kahan dikhe
+  const [page, setPage] = useState("home");
+  const [position, setPosition] = useState("after-hero");
   const [image, setImage] = useState(null);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
-  useEffect(() => {
+  // Re-seed form state whenever the drawer opens for a different record.
+  // (Render-phase sync via useFormSync — replaces the old setState-in-effect.)
+  useFormSync(`${isOpen}|${editData?._id ?? ""}`, () => {
     if (editData) {
       setTitle(editData.title || "");
       setSubtitle(editData.subtitle || "");
       setLinkUrl(editData.linkUrl || "");
       setSortOrder(editData.sortOrder || 0);
       setIsActive(editData.isActive !== false);
+      setPage(editData.page || "home");
+      setPosition(editData.position || "after-hero");
       setImage(null);
     } else {
       setTitle("");
@@ -33,11 +41,13 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
       setLinkUrl("");
       setSortOrder(0);
       setIsActive(true);
+      setPage("home");
+      setPosition("after-hero");
       setImage(null);
     }
     setErrors({});
     setTouched({});
-  }, [editData, isOpen]);
+  });
 
   const validate = (fields = {}) => {
     const errs = {};
@@ -86,6 +96,8 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
     formData.append("linkUrl", linkUrl);
     formData.append("sortOrder", sortOrder);
     formData.append("isActive", isActive);
+    formData.append("page", page);
+    formData.append("position", position);
     if (image) formData.append("image", image);
 
     const action = editData
@@ -179,6 +191,42 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
             className="form-input"
           />
         </Field>
+
+        {/* 🆕 Multi-page promo slot — live niyabags jaisa */}
+        <div className="form-row">
+          <Field
+            label="Show on page"
+            htmlFor="banner-page"
+            hint="Kis storefront page par ye banner dikhe."
+          >
+            <select
+              id="banner-page"
+              value={page}
+              onChange={(e) => setPage(e.target.value)}
+              className="form-select"
+            >
+              <option value="home">Home</option>
+              <option value="shop">Shop</option>
+              <option value="wishlist">Wishlist</option>
+            </select>
+          </Field>
+
+          <Field
+            label="Position"
+            htmlFor="banner-position"
+            hint="Page par kahan dikhe."
+          >
+            <select
+              id="banner-position"
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              className="form-select"
+            >
+              <option value="after-hero">After hero (page top)</option>
+              <option value="after-products">After products grid</option>
+            </select>
+          </Field>
+        </div>
 
         <div className="form-row">
           <Field

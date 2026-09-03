@@ -68,8 +68,15 @@ export const createBanner = async (req, res) => {
 ========================================================= */
 export const getBanners = async (req, res) => {
   try {
+    // 🆕 Optional page filter — ?page=shop ya ?page=wishlist
+    const { page } = req.query;
+    const filter =
+      page && ["home", "shop", "wishlist"].includes(String(page))
+        ? { page: String(page) }
+        : {};
+
     // Fix: Banners ko pehle 'sortOrder' se (1, 2, 3), uske baad naye banners (createdAt) ke hisab se sort kiya hai
-    const banners = await Banner.find().sort({ sortOrder: 1, createdAt: -1 });
+    const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 });
 
     return res.status(200).json({
       message: "Banners fetched successfully",
@@ -142,7 +149,7 @@ export const updateBanner = async (req, res) => {
     const updatedBanner = await Banner.findByIdAndUpdate(
       bannerId,
       { $set: result.data },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
 
     // Agar nayi image aayi thi aur data update ho gaya, toh purani server se delete kar do

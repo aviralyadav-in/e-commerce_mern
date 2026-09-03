@@ -165,7 +165,7 @@ export const updateAddress = async (req, res) => {
     const updatedAddress = await Address.findByIdAndUpdate(
       id,
       { $set: updateData },
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
 
     return res.status(200).json({

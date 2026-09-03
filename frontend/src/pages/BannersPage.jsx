@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchBanners } from "../features/banners/bannersSlice";
 import { exportAllBannersToExcel } from "../utils/exportProductToExcel";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import BannerTable from "../components/banners/BannerTable";
 import BannerModal from "../components/banners/BannerModal";
@@ -59,7 +59,7 @@ const BannersPage = () => {
 
   const handleExportAll = () => {
     if (!banners.length) {
-      dispatch(toastInfo("Nothing to export", "Add a banner first."));
+      notifyInfo("Nothing to export", "Add a banner first.");
       return;
     }
     exportAllBannersToExcel(banners);

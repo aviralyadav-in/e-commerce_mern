@@ -1,60 +1,11 @@
-import React, { useState } from "react";
-import { NavLink, useNavigate } from "react-router";
+import { useState } from "react";
+import { Link, NavLink, useNavigate } from "react-router";
 import { useDispatch, useSelector } from "react-redux";
 import { logoutAdmin } from "../../features/auth/authSlice";
 import ConfirmDialog from "../common/ConfirmDialog";
 import { initials } from "../../utils/format";
-import {
-  HomeIcon,
-  GridIcon,
-  BagIcon,
-  ImageIcon,
-  ClipboardIcon,
-  TagIcon,
-  StarIcon,
-  UsersIcon,
-  HeartIcon,
-  CartIcon,
-  LogoutIcon,
-  XIcon,
-  ChevronsLeftIcon,
-} from "../common/Icon";
-
-export const NAV_GROUPS = [
-  {
-    title: "Overview",
-    links: [{ path: "/dashboard", label: "Dashboard", Icon: HomeIcon }],
-  },
-  {
-    title: "Catalog",
-    links: [
-      { path: "/categories", label: "Categories", Icon: GridIcon },
-      { path: "/products", label: "Products", Icon: BagIcon },
-      { path: "/banners", label: "Banners", Icon: ImageIcon },
-    ],
-  },
-  {
-    title: "Sales",
-    links: [
-      {
-        path: "/orders",
-        label: "Orders",
-        Icon: ClipboardIcon,
-        badge: "openOrders",
-      },
-      { path: "/coupons", label: "Coupons", Icon: TagIcon },
-      { path: "/reviews", label: "Reviews", Icon: StarIcon },
-    ],
-  },
-  {
-    title: "Customers",
-    links: [
-      { path: "/users", label: "Customers", Icon: UsersIcon },
-      { path: "/wishlists", label: "Wishlists", Icon: HeartIcon },
-      { path: "/carts", label: "Carts", Icon: CartIcon },
-    ],
-  },
-];
+import { BagIcon, LogoutIcon, XIcon, ChevronsLeftIcon } from "../common/Icon";
+import { NAV_GROUPS } from "./navGroups";
 
 const Sidebar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
   const dispatch = useDispatch();
@@ -83,68 +34,70 @@ const Sidebar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
     <>
       {isOpen && (
         <div
-          className="fixed inset-0 bg-slate-900/45 z-20 lg:hidden"
+          className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-40 lg:hidden transition-opacity"
           onClick={() => setIsOpen(false)}
           aria-hidden="true"
         />
       )}
 
       <aside
-        className={`sidebar fixed top-0 left-0 h-full z-30 transform transition-all duration-200 ease-out
+        className={`sidebar fixed top-0 left-0 h-full z-50 transform transition-all duration-300 ease-out
           ${isOpen ? "translate-x-0" : "-translate-x-full"}
           lg:translate-x-0 lg:static lg:z-auto`}
         style={{
           width: collapsed ? "var(--sidebar-w-collapsed)" : "var(--sidebar-w)",
         }}
       >
-        {/* Brand */}
+        {/* Brand Header */}
         <div className="sidebar-brand">
-          <div className="w-6.5 h-6.5 rounded-lg bg-(--brand) flex items-center justify-center shrink-0">
-            <BagIcon className="w-3.75 h-3.75 text-white" />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-bold text-white truncate leading-tight">
-                Bag Store
-              </p>
-              <p className="text-[9.5px] text-(--sidebar-muted) uppercase tracking-widest leading-tight">
-                Admin
-              </p>
+          <Link
+            to="/dashboard"
+            onClick={() => setIsOpen(false)}
+            className="flex items-center gap-2.5 min-w-0 flex-1 group cursor-pointer hover:opacity-90 transition-opacity"
+            title="Go to Dashboard"
+          >
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/25 ring-1 ring-white/20 transition-transform group-hover:scale-105">
+              <BagIcon className="w-4 h-4 text-white" />
             </div>
-          )}
+            {!collapsed && (
+              <div className="min-w-0 flex-1 ml-0.5">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[13px] font-bold text-white tracking-tight leading-tight truncate group-hover:text-indigo-200 transition-colors">
+                    Bag Store
+                  </p>
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                    PRO
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-400 font-medium tracking-wide mt-0.5">
+                  Admin Console
+                </p>
+              </div>
+            )}
+          </Link>
           <button
             onClick={() => setIsOpen(false)}
-            className="lg:hidden text-(--sidebar-muted) hover:text-white p-1 shrink-0"
+            className="lg:hidden text-slate-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors shrink-0"
             aria-label="Close menu"
           >
             <XIcon className="w-4 h-4" />
           </button>
-          {!collapsed && (
-            <button
-              onClick={onToggleCollapse}
-              className="hidden lg:flex text-(--sidebar-muted) hover:text-white p-1 shrink-0"
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-            >
-              <ChevronsLeftIcon className="w-4 h-4" />
-            </button>
-          )}
         </div>
 
-        {/* Nav */}
+        {/* Navigation Groups */}
         <nav
-          className={`flex-1 overflow-y-auto sidebar-scroll py-3 space-y-3.5 ${
+          className={`flex-1 overflow-y-auto sidebar-scroll py-4 space-y-4 ${
             collapsed ? "px-2.5" : "px-3"
           }`}
         >
           {NAV_GROUPS.map((group) => (
             <div key={group.title}>
               {collapsed ? (
-                <div className="h-px bg-(--sidebar-border) mx-1 mb-2" />
+                <div className="h-px bg-white/5 mx-1 my-2" />
               ) : (
                 <p className="nav-group-label">{group.title}</p>
               )}
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {group.links.map(({ path, label, Icon, badge }) => {
                   const count = badge ? badges[badge] : 0;
                   return (
@@ -154,22 +107,25 @@ const Sidebar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
                       onClick={() => setIsOpen(false)}
                       title={collapsed ? label : undefined}
                       className={({ isActive }) =>
-                        `nav-link ${isActive ? "nav-link-active" : ""} ${
+                        `nav-link group ${isActive ? "nav-link-active" : ""} ${
                           collapsed ? "justify-center px-0" : ""
                         }`
                       }
                     >
-                      <Icon className="w-4.25 h-4.25 shrink-0" />
+                      <Icon className="w-4.5 h-4.5 shrink-0 transition-transform group-hover:scale-105" />
                       {!collapsed && (
                         <>
-                          <span className="truncate">{label}</span>
+                          <span className="truncate flex-1 font-medium">{label}</span>
                           {count > 0 && (
-                            <span className="nav-badge">{count}</span>
+                            <span className="nav-badge flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                              {count}
+                            </span>
                           )}
                         </>
                       )}
                       {collapsed && count > 0 && (
-                        <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-(--brand)" />
+                        <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-indigo-500 ring-2 ring-slate-900" />
                       )}
                     </NavLink>
                   );
@@ -179,10 +135,10 @@ const Sidebar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
           ))}
         </nav>
 
-        {/* Footer: admin identity + logout */}
-        <div className="border-t border-(--sidebar-border) p-2.5 shrink-0">
+        {/* Footer: Admin Identity + Logout */}
+        <div className="border-t border-white/5 p-3 shrink-0 bg-white/[0.01]">
           {collapsed ? (
-            <div className="flex flex-col items-center gap-1.5">
+            <div className="flex flex-col items-center gap-2">
               <button
                 onClick={onToggleCollapse}
                 className="nav-link justify-center px-0 w-full"
@@ -193,36 +149,39 @@ const Sidebar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
               </button>
               <button
                 onClick={() => setShowLogoutConfirm(true)}
-                className="nav-link justify-center px-0 w-full hover:bg-red-600! hover:text-white!"
+                className="nav-link justify-center px-0 w-full hover:bg-red-500/20! hover:text-red-400!"
                 title="Log out"
                 aria-label="Log out"
               >
-                <LogoutIcon className="w-4 h-4" />
+                <LogoutIcon className="w-4.5 h-4.5 text-slate-400 hover:text-red-400" />
               </button>
             </div>
           ) : (
-            <>
-              <div className="flex items-center gap-2.5 px-2 py-1.5 mb-1">
-                <div className="avatar w-7 h-7 text-[11px] bg-white/10! text-orange-200!">
-                  {initials(admin?.name) || "A"}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <div className="relative">
+                  <div className="avatar w-8 h-8 text-[12px] bg-gradient-to-tr from-indigo-500 to-violet-600 text-white font-bold">
+                    {initials(admin?.name) || "A"}
+                  </div>
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-slate-900" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[11.5px] font-semibold text-white truncate leading-tight">
+                  <p className="text-[12px] font-bold text-white truncate leading-tight">
                     {admin?.name || "Admin"}
                   </p>
-                  <p className="text-[10px] text-(--sidebar-muted) truncate leading-tight">
-                    {admin?.email || "Signed in"}
+                  <p className="text-[10px] text-slate-400 truncate leading-tight mt-0.5">
+                    {admin?.email || "admin@bagstore.com"}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowLogoutConfirm(true)}
-                className="nav-link w-full hover:bg-red-600! hover:text-white!"
+                className="nav-link w-full text-slate-400 hover:bg-red-500/15! hover:text-red-300! transition-colors justify-start"
               >
-                <LogoutIcon className="w-4.25 h-4.25 shrink-0" />
-                Log out
+                <LogoutIcon className="w-4 h-4 shrink-0 text-slate-400 group-hover:text-red-300" />
+                <span>Log out</span>
               </button>
-            </>
+            </div>
           )}
         </div>
       </aside>

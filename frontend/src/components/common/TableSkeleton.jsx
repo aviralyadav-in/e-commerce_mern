@@ -1,4 +1,3 @@
-import React from "react";
 
 /**
  * Placeholder rows that match the real table's geometry, so the first paint

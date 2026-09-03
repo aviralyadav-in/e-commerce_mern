@@ -1,4 +1,3 @@
-import React from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "./Icon";
 
 /** Windowed page list: 1 … 4 5 6 … 12 */

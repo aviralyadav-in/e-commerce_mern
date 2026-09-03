@@ -1,4 +1,3 @@
-import React from "react";
 import { AlertIcon, RefreshIcon } from "./Icon";
 
 /** Inline page-level error with an optional retry. */

@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchUsers } from "../features/users/usersSlice";
 import { exportAllUsersToExcel } from "../utils/exportProductToExcel";
-import { toastInfo } from "../features/ui/uiSlice";
+import { notifyInfo } from "../lib/toast";
 
 import PageHeader from "../components/common/PageHeader";
 import UserTable from "../components/users/UserTable";
@@ -54,7 +54,7 @@ const UsersPage = () => {
 
   const handleExport = () => {
     if (!users.length) {
-      dispatch(toastInfo("Nothing to export", "No customers registered yet."));
+      notifyInfo("Nothing to export", "No customers registered yet.");
       return;
     }
     exportAllUsersToExcel(users);
