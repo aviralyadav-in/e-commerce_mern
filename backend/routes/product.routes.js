@@ -6,6 +6,7 @@ import {
   deleteProduct,
   getProductById,
   getProducts,
+  restoreProduct,
   updateProduct,
 } from "../controllers/product.controller.js";
 
@@ -47,6 +48,9 @@ productRouter.put(
   ]),
   updateProduct,
 );
+
+// Soft delete ke baad restore
+productRouter.patch("/admin/:id/restore", adminRoute, restoreProduct);
 
 productRouter.delete("/admin/:id", adminRoute, deleteProduct);
 

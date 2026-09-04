@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   addCategory,
+  clearCategoryError,
   updateCategory,
 } from "../../features/categories/categoriesSlice";
 import useFormSync from "../../hooks/useFormSync";
@@ -14,12 +15,16 @@ const SUB_OPTIONS = ["Men", "Women"];
 
 const CategoryModal = ({ isOpen, onClose, editData }) => {
   const dispatch = useDispatch();
-  const { loading, error } = useSelector((state) => state.categories);
+  const { categories, loading, error } = useSelector(
+    (state) => state.categories,
+  );
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState(null);
   const [subCategories, setSubCategories] = useState(["Men", "Women"]);
+  // 🆕 Hierarchy — parent category (jaise Bags under Men)
+  const [parentId, setParentId] = useState("");
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
@@ -35,15 +40,26 @@ const CategoryModal = ({ isOpen, onClose, editData }) => {
           ? editData.subCategories
           : ["Men", "Women"],
       );
+      setParentId(
+        editData.parentId
+          ? String(editData.parentId?._id || editData.parentId)
+          : "",
+      );
     } else {
       setName("");
       setDescription("");
       setImage(null);
       setSubCategories(["Men", "Women"]);
+      setParentId("");
     }
     setErrors({});
     setTouched({});
   });
+
+  // Redux error clear karna external-system update hai — effect allowed hai
+  useEffect(() => {
+    if (isOpen) dispatch(clearCategoryError());
+  }, [dispatch, isOpen]);
 
   const validate = (fields = {}) => {
     const errs = {};
@@ -108,6 +124,48 @@ const CategoryModal = ({ isOpen, onClose, editData }) => {
 
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
+  /**
+   * Parent-category dropdown options, computed like real admin panels:
+   * - Child categories show their full path (e.g. "Bags › Laptop Bags").
+   * - In edit mode, the category itself and all of its descendants are
+   *   excluded so it can never be nested inside its own subtree (cycle).
+   */
+  const parentOptions = (() => {
+    const excluded = new Set();
+    if (editData) {
+      excluded.add(String(editData._id));
+      let grew = true;
+      while (grew) {
+        grew = false;
+        for (const c of categories) {
+          const pid = c.parentId
+            ? String(c.parentId._id || c.parentId)
+            : null;
+          if (pid && excluded.has(pid) && !excluded.has(String(c._id))) {
+            excluded.add(String(c._id));
+            grew = true;
+          }
+        }
+      }
+    }
+
+    const namesById = new Map(
+      categories.map((c) => [String(c._id), c.name]),
+    );
+
+    return categories
+      .filter((c) => !excluded.has(String(c._id)))
+      .map((c) => {
+        const pid = c.parentId ? String(c.parentId._id || c.parentId) : null;
+        const parentName = pid ? namesById.get(pid) : null;
+        return {
+          id: String(c._id),
+          label: parentName ? `${parentName} › ${c.name}` : c.name,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  })();
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setTouched({
@@ -125,6 +183,7 @@ const CategoryModal = ({ isOpen, onClose, editData }) => {
     formData.append("slug", slug);
     formData.append("description", description);
     formData.append("subCategories", JSON.stringify(subCategories));
+    formData.append("parentId", parentId);
     if (image) formData.append("image", image);
 
     const action = editData
@@ -204,6 +263,11 @@ const CategoryModal = ({ isOpen, onClose, editData }) => {
           required
           htmlFor="cat-desc"
           error={touched.description ? errors.description : undefined}
+          hint={
+            description.trim()
+              ? `${description.length} / 500 characters`
+              : "Shown on the category page to help shoppers understand the collection."
+          }
         >
           <textarea
             id="cat-desc"
@@ -247,6 +311,26 @@ const CategoryModal = ({ isOpen, onClose, editData }) => {
               );
             })}
           </div>
+        </Field>
+
+        {/* 🆕 Hierarchy — parent category (structure ke liye) */}
+        <Field
+          label="Parent category"
+          optional
+          hint="Assign a parent category to create a hierarchy — for example, Laptop Bags under Bags. Leave as None for a top-level category."
+        >
+          <select
+            value={parentId}
+            onChange={(e) => setParentId(e.target.value)}
+            className="form-select"
+          >
+            <option value="">None — top-level category</option>
+            {parentOptions.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
         </Field>
 
         <Field

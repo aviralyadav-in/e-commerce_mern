@@ -12,6 +12,7 @@ const uploadDir = path.join(__dirname, "..", "uploads");
 const foldersToCreate = [
   uploadDir,
   path.join(uploadDir, "categories"),
+  path.join(uploadDir, "collections"), // 🆕 Collections images
   path.join(uploadDir, "products"),
   path.join(uploadDir, "banners"), // 🔥 Banner folder added
   path.join(uploadDir, "avatars"), // 🆕 User profile photos
@@ -61,6 +62,7 @@ const createUpload = (subFolder) => {
 
 // Exports
 export const categoryUpload = createUpload("categories");
+export const collectionUpload = createUpload("collections"); // 🆕 Collections
 export const productUpload = createUpload("products");
 export const bannerUpload = createUpload("banners"); // 🔥 Banner export added
 export const avatarUpload = createUpload("avatars"); // 🆕 User profile photos

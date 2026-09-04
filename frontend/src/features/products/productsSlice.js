@@ -10,14 +10,32 @@ const buildProductQuery = (params = {}) => {
   return query.toString();
 };
 
+// Server-paginated endpoint ko page-by-page loop karke SAARE products
+// laate hain — pehle sirf pehle 100 aa rahe the (101st product invisible).
+const MAX_PAGES = 50; // safety cap
+
+const fetchAllProductPages = async (params = {}) => {
+  const limit = 100;
+  let page = 1;
+  let totalPages = 1;
+  const all = [];
+  do {
+    const qs = buildProductQuery({ ...params, limit, page });
+    const response = await API.get(`/products?${qs}`);
+    const data = response.data || {};
+    all.push(...(data.products || []));
+    totalPages = Number(data.pagination?.totalPages) || 1;
+    page += 1;
+  } while (page <= Math.min(totalPages, MAX_PAGES));
+  return all;
+};
+
 // 1. Fetch All Products
 export const fetchProducts = createAsyncThunk(
   "products/fetchAll",
   async (params = {}, { rejectWithValue }) => {
     try {
-      const qs = buildProductQuery(params);
-      const response = await API.get(`/products?${qs}`);
-      return response.data.products || [];
+      return await fetchAllProductPages(params);
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Error fetching products",
@@ -31,9 +49,7 @@ export const fetchProductsByCategory = createAsyncThunk(
   "products/fetchByCategory",
   async (categoryId, { rejectWithValue }) => {
     try {
-      const qs = buildProductQuery({ categoryId, limit: 100 });
-      const response = await API.get(`/products?${qs}`);
-      return response.data.products || [];
+      return await fetchAllProductPages({ categoryId });
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Error fetching products by category",
@@ -83,6 +99,21 @@ export const deleteProduct = createAsyncThunk(
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Error deleting product",
+      );
+    }
+  },
+);
+
+// 🆕 Soft delete (hide) ke baad wapas live karo
+export const restoreProduct = createAsyncThunk(
+  "products/restore",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await API.patch(`/products/admin/${id}/restore`);
+      return response.data.product;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Error restoring product",
       );
     }
   },
@@ -189,6 +220,19 @@ const productsSlice = createSlice({
         );
       })
       .addCase(deleteProduct.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(restoreProduct.fulfilled, (state, action) => {
+        state.loading = false;
+        const index = state.products.findIndex(
+          (prod) => prod._id === action.payload._id,
+        );
+        if (index !== -1) {
+          state.products[index] = action.payload;
+        }
+      })
+      .addCase(restoreProduct.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

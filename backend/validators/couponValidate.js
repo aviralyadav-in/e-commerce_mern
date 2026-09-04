@@ -36,4 +36,21 @@ export const couponValidationSchema = z.object({
     })
     .optional()
     .default(true),
+
+  // Optional limits — null/absent = unlimited
+  usageLimit: z
+    .number({ error: "Usage limit must be a number" })
+    .int("Usage limit must be a whole number")
+    .min(1, "Usage limit must be at least 1")
+    .nullable()
+    .optional()
+    .default(null),
+
+  perUserLimit: z
+    .number({ error: "Per-user limit must be a number" })
+    .int("Per-user limit must be a whole number")
+    .min(1, "Per-user limit must be at least 1")
+    .nullable()
+    .optional()
+    .default(null),
 });

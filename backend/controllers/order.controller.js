@@ -112,6 +112,7 @@ export const createOrder = async (req, res) => {
     // 3. Coupon Validation & Real Discount Calculation
     let discountAmount = 0;
     let appliedCouponCode = null;
+    let appliedCoupon = null;
 
     if (couponCode) {
       const normalizedCode = String(couponCode).trim().toUpperCase();
@@ -133,6 +134,29 @@ export const createOrder = async (req, res) => {
         });
       }
 
+      // Usage limit — total redemptions check karo
+      if (
+        coupon.usageLimit != null &&
+        (coupon.usedCount || 0) >= coupon.usageLimit
+      ) {
+        return res
+          .status(400)
+          .json({ message: "This coupon has reached its usage limit" });
+      }
+
+      // Per-user limit — coupon.usedBy me is user ka count
+      if (coupon.perUserLimit != null) {
+        const entry = (coupon.usedBy || []).find(
+          (u) => String(u.user) === String(userId),
+        );
+        if (entry && (entry.count || 0) >= coupon.perUserLimit) {
+          return res.status(400).json({
+            message:
+              "You have already used this coupon the maximum number of times",
+          });
+        }
+      }
+
       if (coupon.discountType === "percentage") {
         discountAmount = (itemsPrice * coupon.discountValue) / 100;
       } else if (coupon.discountType === "flat") {
@@ -142,6 +166,7 @@ export const createOrder = async (req, res) => {
       // Discount kabhi items ke total se zyada nahi ho sakta
       discountAmount = Math.min(discountAmount, itemsPrice);
       appliedCouponCode = coupon.code;
+      appliedCoupon = coupon;
     }
 
     // 4. Shipping — storefront CartSummary jaisa hi (discounted amount par based)
@@ -164,7 +189,10 @@ export const createOrder = async (req, res) => {
       discountAmount,
       totalAmount,
       paymentMethod,
-      paymentStatus: paymentMethod === "COD" ? "Pending" : "Completed", // Placeholder logic
+      // No payment gateway hai — Card/UPI bhi Pending rahenge jab tak admin
+      // payment manually confirm na kare (paymentStatus = Completed).
+      // Fake "Completed" revenue se bachne ke liye.
+      paymentStatus: "Pending",
     });
 
     // 6. Deduct Stock from Products
@@ -172,6 +200,20 @@ export const createOrder = async (req, res) => {
       await Product.findByIdAndUpdate(item.product, {
         $inc: { stock: -item.quantity },
       });
+    }
+
+    // 6b. Coupon usage record karo — usedCount + per-user count badhao
+    if (appliedCoupon) {
+      const bumped = await Coupon.findOneAndUpdate(
+        { _id: appliedCoupon._id, "usedBy.user": userId },
+        { $inc: { usedCount: 1, "usedBy.$.count": 1 } },
+      );
+      if (!bumped) {
+        await Coupon.findByIdAndUpdate(appliedCoupon._id, {
+          $inc: { usedCount: 1 },
+          $push: { usedBy: { user: userId, count: 1 } },
+        });
+      }
     }
 
     // 7. Order place hone ke baad user ka Cart server-side clear karo
@@ -274,9 +316,11 @@ export const getAllOrders = async (req, res) => {
     // Admin dashboard ke liye total sales ka calculate karna
     let totalSales = 0;
     orders.forEach((order) => {
+      // Revenue = sirf CONFIRMED payments. Pending COD/Card/UPI paisa
+      // nahi hai, aur Cancelled orders bhi revenue nahi hote.
       if (
-        order.paymentStatus === "Completed" ||
-        order.orderStatus === "Delivered"
+        order.paymentStatus === "Completed" &&
+        order.orderStatus !== "Cancelled"
       ) {
         totalSales += order.totalAmount;
       }
@@ -351,23 +395,8 @@ export const updateOrderStatus = async (req, res) => {
 };
 
 /* =========================================================
-   6. DELETE ORDER (Admin Route)
+   NOTE: Order hard-DELETE route hata di gayi hai.
+   Real admins order ko CANCEL karte hain (updateOrderStatus se
+   orderStatus = Cancelled — stock restore + refund trail bhi).
+   Hard delete se order history/reports corrupt ho jaate the.
 ========================================================= */
-export const deleteOrder = async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id);
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    await Order.findByIdAndDelete(req.params.id);
-
-    return res.status(200).json({
-      message: "Order deleted successfully",
-    });
-  } catch (error) {
-    console.error("Delete Order Error:", error);
-    return res.status(500).json({ message: "Internal server error" });
-  }
-};

@@ -1,9 +1,9 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
-  deleteCategory,
-  restoreCategory,
-} from "../../features/categories/categoriesSlice";
+  deleteCollection,
+  restoreCollection,
+} from "../../features/collections/collectionsSlice";
 import useTableControls from "../../hooks/useTableControls";
 import ConfirmDialog from "../common/ConfirmDialog";
 import EmptyState from "../common/EmptyState";
@@ -18,18 +18,46 @@ import {
   PlusIcon,
 } from "../common/Icon";
 
-const ACCESSORS = {
-  name: (c) => c.name,
-  status: (c) => (c.isActive !== false ? 1 : 0),
-  subs: (c) => c.subCategories?.length ?? 2,
+const OPERATOR_LABELS = {
+  gt: ">",
+  gte: "≥",
+  lt: "<",
+  lte: "≤",
+  eq: "=",
+  withinDays: "last",
+};
+const FIELD_LABELS = {
+  price: "Price",
+  stock: "Stock",
+  createdAt: "Created",
+  subCategory: "Dept",
 };
 
-const CategoryTable = ({ categories, onEdit, onCreate }) => {
+// Automated collection ke rules ka human-readable summary
+const describeRules = (rules = []) =>
+  rules
+    .map((r) => {
+      if (r.field === "createdAt" && r.operator === "withinDays")
+        return `Created within ${r.value} days`;
+      if (r.field === "subCategory") return `Dept = ${r.value}`;
+      return `${FIELD_LABELS[r.field] || r.field} ${
+        OPERATOR_LABELS[r.operator] || r.operator
+      } ${r.value}`;
+    })
+    .join(" AND ");
+
+const ACCESSORS = {
+  name: (c) => c.name,
+  products: (c) => c.productCount || 0,
+  status: (c) => (c.isActive !== false ? 1 : 0),
+};
+
+const CollectionTable = ({ collections, onEdit, onCreate }) => {
   const dispatch = useDispatch();
-  const { deleteLoading } = useSelector((state) => state.categories);
+  const { deleteLoading } = useSelector((state) => state.collections);
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const table = useTableControls(categories, {
+  const table = useTableControls(collections, {
     accessors: ACCESSORS,
     initialSort: { key: "name", dir: "asc" },
     pageSize: 10,
@@ -37,7 +65,7 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
-    dispatch(deleteCategory(deleteTarget._id));
+    dispatch(deleteCollection(deleteTarget._id));
     setDeleteTarget(null);
   };
 
@@ -49,15 +77,16 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
             <thead>
               <tr>
                 <SortableTh
-                  label="Category"
+                  label="Collection"
                   sortKey="name"
                   sort={table.sort}
                   onSort={table.toggleSort}
                 />
                 <th scope="col">Description</th>
+                <th scope="col">Type</th>
                 <SortableTh
-                  label="Sub-categories"
-                  sortKey="subs"
+                  label="Products"
+                  sortKey="products"
                   sort={table.sort}
                   onSort={table.toggleSort}
                 />
@@ -74,94 +103,113 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
             </thead>
             <tbody>
               {table.rows.length > 0 ? (
-                table.rows.map((cat) => (
-                  <tr key={cat._id} className="hover:bg-slate-50/80 transition-colors">
+                table.rows.map((col) => (
+                  <tr
+                    key={col._id}
+                    className="hover:bg-slate-50/80 transition-colors"
+                  >
                     <td>
                       <div className="flex items-center gap-3">
                         <Thumb
-                          src={cat.image}
-                          alt={cat.name}
+                          src={col.image}
+                          alt={col.name}
                           className="w-10 h-10"
                           rounded="rounded-xl"
                         />
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="cell-strong truncate text-[13px]">{cat.name}</p>
-                            {cat.parentId?.name && (
+                            <p className="cell-strong truncate text-[13px]">
+                              {col.name}
+                            </p>
+                            {col.showOnHomePage === true && (
                               <span
-                                className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
-                                title="Parent category"
+                                className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                                title="Featured on website home page"
                               >
-                                ↳ {cat.parentId.name}
+                                Home
+                              </span>
+                            )}
+                            {col.showAsBadge === true && (
+                              <span
+                                className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700"
+                                title="Shown as badge on product cards"
+                              >
+                                Badge
                               </span>
                             )}
                           </div>
                           <span className="cell-sub font-mono truncate text-slate-400 text-[11px]">
-                            /{cat.slug}
+                            /{col.slug}
                           </span>
                         </div>
                       </div>
                     </td>
                     <td className="max-w-70">
                       <p className="line-clamp-2 text-slate-500 text-[12.5px]">
-                        {cat.description || "—"}
+                        {col.description || "—"}
                       </p>
                     </td>
                     <td>
-                      <div className="flex flex-wrap gap-1.5">
-                        {(cat.subCategories?.length
-                          ? cat.subCategories
-                          : ["Men", "Women"]
-                        ).map((sub) => (
-                          <span
-                            key={sub}
-                            className={`badge ${
-                              sub === "Men" ? "badge-info" : "badge-pink"
-                            }`}
-                          >
-                            {sub}
+                      {col.type === "automated" ? (
+                        <div className="min-w-0">
+                          <span className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                            Automated
                           </span>
-                        ))}
-                      </div>
+                          <p
+                            className="mt-0.5 truncate text-[11px] text-slate-400"
+                            title={describeRules(col.rules)}
+                          >
+                            {describeRules(col.rules) || "No rules"}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                          Manual
+                        </span>
+                      )}
                     </td>
                     <td>
-                      <span
-                        className={`badge ${
-                          cat.isActive !== false
-                            ? "badge-success"
-                            : "badge-neutral"
-                        }`}
-                      >
-                        <span className="badge-dot" />
-                        {cat.isActive !== false ? "Active" : "Inactive"}
+                      <span className="cell-strong text-[13px]">
+                        {col.productCount ?? "—"}
                       </span>
+                    </td>
+                    <td>
+                      {col.isActive !== false ? (
+                        <span className="meta-chip meta-chip-success">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="meta-chip">Hidden</span>
+                      )}
                     </td>
                     <td className="text-right">
                       <div className="flex justify-end gap-1.5">
                         <button
-                          onClick={() => onEdit(cat)}
+                          onClick={() => onEdit(col)}
                           className="icon-btn icon-btn-edit"
-                          title="Edit category"
-                          aria-label={`Edit ${cat.name}`}
+                          title="Edit collection"
+                          aria-label={`Edit ${col.name}`}
                         >
                           <PencilIcon className="w-3.5 h-3.5" />
                         </button>
-                        {cat.isActive === false && (
+                        {col.isActive === false && (
                           <button
-                            onClick={() => dispatch(restoreCategory(cat._id))}
+                            onClick={() =>
+                              dispatch(restoreCollection(col._id))
+                            }
                             className="icon-btn icon-btn-view"
-                            title="Restore category"
-                            aria-label={`Restore ${cat.name}`}
+                            title="Restore collection"
+                            aria-label={`Restore ${col.name}`}
                           >
                             <RefreshIcon className="w-3.5 h-3.5" />
                           </button>
                         )}
                         <button
-                          onClick={() => setDeleteTarget(cat)}
+                          onClick={() => setDeleteTarget(col)}
                           disabled={deleteLoading}
                           className="icon-btn icon-btn-delete"
-                          title="Hide category"
-                          aria-label={`Hide ${cat.name}`}
+                          title="Hide collection"
+                          aria-label={`Hide ${col.name}`}
                         >
                           <TrashIcon className="w-3.5 h-3.5" />
                         </button>
@@ -171,11 +219,11 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="empty-cell">
+                  <td colSpan="6" className="empty-cell">
                     <EmptyState
                       icon={<GridIcon className="w-5 h-5" />}
-                      title="No categories yet"
-                      message="Categories group your products in the storefront. Create the first one to start adding products."
+                      title="No collections yet"
+                      message="Collections curate products for marketing — badges, home sections aur shop filters. Create the first one to get started."
                       action={
                         onCreate && (
                           <button
@@ -183,7 +231,7 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
                             className="btn btn-primary btn-sm"
                           >
                             <PlusIcon className="w-3.5 h-3.5" />
-                            Add category
+                            Add collection
                           </button>
                         )
                       }
@@ -204,19 +252,19 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
           rangeEnd={table.rangeEnd}
           onPage={table.setPage}
           onPageSize={table.setPageSize}
-          noun="categories"
+          noun="collections"
         />
       </div>
 
       <ConfirmDialog
         isOpen={!!deleteTarget}
-        title="Hide category?"
+        title="Hide collection?"
         message={
           deleteTarget
             ? `“${deleteTarget.name}” will be hidden from the storefront. Its products are NOT deleted — you can restore it anytime from the Inactive filter.`
             : ""
         }
-        confirmLabel="Hide category"
+        confirmLabel="Hide collection"
         variant="danger"
         busy={deleteLoading}
         onConfirm={handleConfirmDelete}
@@ -226,4 +274,4 @@ const CategoryTable = ({ categories, onEdit, onCreate }) => {
   );
 };
 
-export default CategoryTable;
+export default CollectionTable;

@@ -41,4 +41,12 @@ export const categoryValidationSchema = z.object({
     })
     .optional()
     .default(true),
+
+  // 🆕 Hierarchy — parent category (optional; "" ya null = top-level).
+  // Controller FormData ka empty string null bana deta hai.
+  parentId: z
+    .string()
+    .regex(/^[0-9a-fA-F]{24}$/, "Invalid parent category ID")
+    .nullable()
+    .optional(),
 });

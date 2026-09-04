@@ -17,6 +17,7 @@ const ReviewsPage = () => {
   const { reviews, loading, error } = useSelector((state) => state.reviews);
   const [search, setSearch] = useState("");
   const [rating, setRating] = useState(null);
+  const [status, setStatus] = useState(null);
 
   useEffect(() => {
     dispatch(fetchAllReviews());
@@ -32,9 +33,19 @@ const ReviewsPage = () => {
     return buckets;
   }, [reviews]);
 
+  const statusCounts = useMemo(() => {
+    const counts = { Approved: 0, Pending: 0, Hidden: 0 };
+    reviews.forEach((r) => {
+      const s = r.status || "Pending";
+      if (counts[s] != null) counts[s] += 1;
+    });
+    return counts;
+  }, [reviews]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return reviews.filter((r) => {
+      if (status && (r.status || "Pending") !== status) return false;
       if (rating && Number(r.rating) !== rating) return false;
       if (!q) return true;
       return (
@@ -52,7 +63,7 @@ const ReviewsPage = () => {
           .includes(q)
       );
     });
-  }, [reviews, search, rating]);
+  }, [reviews, search, rating, status]);
 
   const avgRating =
     reviews.length > 0
@@ -75,7 +86,7 @@ const ReviewsPage = () => {
     <div className="page-shell">
       <PageHeader
         title="Reviews"
-        subtitle="Moderate what customers are saying about your products."
+        subtitle="Approve, hide or remove what customers are saying about your products."
         meta={
           <>
             <span className="meta-chip meta-chip-warning">
@@ -121,6 +132,24 @@ const ReviewsPage = () => {
             { value: 1, label: "1 ★", count: byRating[1] },
           ]}
         />
+        <SegmentedFilter
+          value={status}
+          onChange={setStatus}
+          options={[
+            { value: null, label: "All", count: reviews.length },
+            {
+              value: "Pending",
+              label: "Pending",
+              count: statusCounts.Pending,
+            },
+            {
+              value: "Approved",
+              label: "Approved",
+              count: statusCounts.Approved,
+            },
+            { value: "Hidden", label: "Hidden", count: statusCounts.Hidden },
+          ]}
+        />
       </div>
 
       <ErrorBanner
@@ -137,7 +166,8 @@ const ReviewsPage = () => {
       {reviews.length > 0 && (
         <p className="flex items-center gap-1.5 mt-3 text-[11.5px] text-(--ink-faint)">
           <StarFilledIcon className="w-3.5 h-3.5 text-amber-400" />
-          Deleting a review recalculates that product&apos;s average rating.
+          Only <b>Approved</b> reviews show on the storefront; hiding or
+          deleting a review recalculates that product&apos;s average rating.
         </p>
       )}
     </div>

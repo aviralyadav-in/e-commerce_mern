@@ -20,6 +20,7 @@ const ACCESSORS = {
   code: (c) => c.code,
   discount: (c) => Number(c.discountValue) || 0,
   minOrder: (c) => Number(c.minOrderValue) || 0,
+  used: (c) => Number(c.usedCount) || 0,
   expiry: (c) => (c.expiryDate ? new Date(c.expiryDate).getTime() : null),
   status: (c) => couponState(c),
 };
@@ -62,6 +63,13 @@ const CouponTable = ({ coupons, onEdit, onCreate }) => {
                 <SortableTh
                   label="Min order"
                   sortKey="minOrder"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                  align="right"
+                />
+                <SortableTh
+                  label="Used"
+                  sortKey="used"
                   sort={table.sort}
                   onSort={table.toggleSort}
                   align="right"
@@ -123,6 +131,19 @@ const CouponTable = ({ coupons, onEdit, onCreate }) => {
                           {coupon.expiryDate ? formatDate(coupon.expiryDate) : "Never"}
                         </span>
                       </td>
+                      <td className="text-right whitespace-nowrap">
+                        <p className="cell-strong text-slate-800 text-[12.5px] tabular-nums">
+                          {coupon.usedCount || 0}
+                          {coupon.usageLimit != null
+                            ? ` / ${coupon.usageLimit}`
+                            : ""}
+                        </p>
+                        {coupon.perUserLimit != null && (
+                          <span className="cell-sub text-slate-400 text-[10.5px]">
+                            max {coupon.perUserLimit}/user
+                          </span>
+                        )}
+                      </td>
                       <td>
                         <span className={`badge ${badge.className}`}>
                           <span className="badge-dot" />
@@ -154,7 +175,7 @@ const CouponTable = ({ coupons, onEdit, onCreate }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan="6" className="empty-cell">
+                  <td colSpan="7" className="empty-cell">
                     <EmptyState
                       icon={<TagIcon className="w-5 h-5" />}
                       title="No coupons yet"

@@ -1,2 +1,6 @@
 backend/.env
 storefront/
+website/
+backend-test.log
+PROJECT_CONTEXT.md
+Stalefunc.md

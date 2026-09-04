@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { deleteProduct } from "../../features/products/productsSlice";
+import {
+  deleteProduct,
+  restoreProduct,
+} from "../../features/products/productsSlice";
 import { exportProductToExcel } from "../../utils/exportProductToExcel";
 import useTableControls from "../../hooks/useTableControls";
 import ConfirmDialog from "../common/ConfirmDialog";
@@ -14,6 +17,7 @@ import {
   DownloadIcon,
   PencilIcon,
   PlusIcon,
+  RefreshIcon,
   StarFilledIcon,
   TrashIcon,
 } from "../common/Icon";
@@ -133,9 +137,25 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                         {getCategoryName(prod.categoryId)}
                       </td>
                       <td>
-                        <span className="badge badge-neutral capitalize font-semibold">
-                          {prod.subCategory || "Unisex"}
-                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(
+                            Array.isArray(prod.subCategory) &&
+                            prod.subCategory.length
+                              ? prod.subCategory
+                              : prod.subCategory
+                                ? [prod.subCategory]
+                                : ["Men"]
+                          ).map((sub) => (
+                            <span
+                              key={sub}
+                              className={`badge ${
+                                sub === "Men" ? "badge-info" : "badge-pink"
+                              }`}
+                            >
+                              {sub}
+                            </span>
+                          ))}
+                        </div>
                       </td>
                       <td className="text-right whitespace-nowrap">
                         {hasDiscount ? (
@@ -220,10 +240,20 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                           >
                             <PencilIcon className="w-3.5 h-3.5" />
                           </button>
+                          {prod.isActive === false && (
+                            <button
+                              onClick={() => dispatch(restoreProduct(prod._id))}
+                              title="Restore product"
+                              aria-label={`Restore ${prod.name}`}
+                              className="icon-btn icon-btn-view"
+                            >
+                              <RefreshIcon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => setDeleteTarget(prod)}
-                            title="Delete product"
-                            aria-label={`Delete ${prod.name}`}
+                            title="Hide product"
+                            aria-label={`Hide ${prod.name}`}
                             className="icon-btn icon-btn-delete"
                           >
                             <TrashIcon className="w-3.5 h-3.5" />
@@ -274,13 +304,13 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
 
       <ConfirmDialog
         isOpen={!!deleteTarget}
-        title="Delete product?"
+        title="Hide product?"
         message={
           deleteTarget
-            ? `“${deleteTarget.name}” will be permanently removed from your catalog. This cannot be undone.`
+            ? `“${deleteTarget.name}” will be hidden from the storefront. Nothing is permanently deleted — order history stays intact and you can restore it anytime.`
             : ""
         }
-        confirmLabel="Delete product"
+        confirmLabel="Hide product"
         variant="danger"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}

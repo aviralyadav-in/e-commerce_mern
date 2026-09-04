@@ -15,6 +15,8 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
   const [discountType, setDiscountType] = useState("percentage");
   const [discountValue, setDiscountValue] = useState("");
   const [minOrderValue, setMinOrderValue] = useState("");
+  const [usageLimit, setUsageLimit] = useState("");
+  const [perUserLimit, setPerUserLimit] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [errors, setErrors] = useState({});
@@ -28,6 +30,12 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
       setDiscountType(editData.discountType || "percentage");
       setDiscountValue(editData.discountValue || "");
       setMinOrderValue(editData.minOrderValue || "");
+      setUsageLimit(
+        editData.usageLimit != null ? String(editData.usageLimit) : "",
+      );
+      setPerUserLimit(
+        editData.perUserLimit != null ? String(editData.perUserLimit) : "",
+      );
       setExpiryDate(
         editData.expiryDate
           ? new Date(editData.expiryDate).toISOString().split("T")[0]
@@ -39,6 +47,8 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
       setDiscountType("percentage");
       setDiscountValue("");
       setMinOrderValue("");
+      setUsageLimit("");
+      setPerUserLimit("");
       setExpiryDate("");
       setIsActive(true);
     }
@@ -69,6 +79,18 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
 
     if (mov !== "" && Number(mov) < 0) {
       errs.minOrderValue = "Min order value cannot be negative.";
+    }
+
+    // Usage limits — diya ho to kam se kam 1 (khali = unlimited)
+    const ul = "usageLimit" in fields ? fields.usageLimit : usageLimit;
+    const pul =
+      "perUserLimit" in fields ? fields.perUserLimit : perUserLimit;
+    if (ul !== "" && (!Number.isInteger(Number(ul)) || Number(ul) < 1)) {
+      errs.usageLimit = "Usage limit must be a whole number of at least 1.";
+    }
+    if (pul !== "" && (!Number.isInteger(Number(pul)) || Number(pul) < 1)) {
+      errs.perUserLimit =
+        "Per-user limit must be a whole number of at least 1.";
     }
 
     if (!ed) errs.expiryDate = "Expiry date is required.";
@@ -105,6 +127,8 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
       code: true,
       discountValue: true,
       minOrderValue: true,
+      usageLimit: true,
+      perUserLimit: true,
       expiryDate: true,
     });
     const errs = validate();
@@ -116,6 +140,13 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
       discountType,
       discountValue: Number(discountValue),
       minOrderValue: Number(minOrderValue) || 0,
+      // Khali = unlimited (null bhejo)
+      usageLimit:
+        usageLimit !== "" && Number(usageLimit) > 0 ? Number(usageLimit) : null,
+      perUserLimit:
+        perUserLimit !== "" && Number(perUserLimit) > 0
+          ? Number(perUserLimit)
+          : null,
       expiryDate,
       isActive,
     };
@@ -230,10 +261,19 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
           </Field>
 
           <Field
-            label={discountType === "percentage" ? "Percent off" : "Amount off"}
+            label={
+              discountType === "percentage" ? "Percent off" : "Amount off"
+            }
             required
             htmlFor="coupon-value"
             error={err("discountValue")}
+            hint={
+              err("discountValue")
+                ? undefined
+                : discountType === "percentage"
+                  ? "Percentage of the order total — cannot exceed 100%."
+                  : "Flat ₹ amount deducted from the order total."
+            }
           >
             <input
               id="coupon-value"
@@ -257,6 +297,7 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
             optional
             htmlFor="coupon-min"
             error={err("minOrderValue")}
+            hint="Orders below this amount cannot use the coupon. Leave empty for no minimum."
           >
             <input
               id="coupon-min"
@@ -278,6 +319,7 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
             required
             htmlFor="coupon-expiry"
             error={err("expiryDate")}
+            hint="Customers can use the coupon up to this date — it stops working afterwards."
           >
             <input
               id="coupon-expiry"
@@ -289,6 +331,52 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
               }}
               onBlur={() => handleBlur("expiryDate", expiryDate)}
               className={`form-input ${invalid("expiryDate")}`}
+            />
+          </Field>
+        </div>
+
+        <div className="form-row">
+          <Field
+            label="Total usage limit"
+            optional
+            htmlFor="coupon-usage-limit"
+            error={err("usageLimit")}
+            hint="How many times this coupon can be used in total. Leave empty for unlimited."
+          >
+            <input
+              id="coupon-usage-limit"
+              type="number"
+              min="1"
+              value={usageLimit}
+              onChange={(e) => {
+                setUsageLimit(e.target.value);
+                revalidate("usageLimit", e.target.value);
+              }}
+              onBlur={() => handleBlur("usageLimit", usageLimit)}
+              placeholder="100"
+              className={`form-input ${invalid("usageLimit")}`}
+            />
+          </Field>
+
+          <Field
+            label="Per-user limit"
+            optional
+            htmlFor="coupon-user-limit"
+            error={err("perUserLimit")}
+            hint="How many times each customer can use it. Leave empty for unlimited."
+          >
+            <input
+              id="coupon-user-limit"
+              type="number"
+              min="1"
+              value={perUserLimit}
+              onChange={(e) => {
+                setPerUserLimit(e.target.value);
+                revalidate("perUserLimit", e.target.value);
+              }}
+              onBlur={() => handleBlur("perUserLimit", perUserLimit)}
+              placeholder="1"
+              className={`form-input ${invalid("perUserLimit")}`}
             />
           </Field>
         </div>

@@ -34,7 +34,7 @@ const productToRow = (product, categoryName) => ({
   Price: product.price ?? "",
   "Discount Price": product.discountPrice ?? "",
   Stock: product.stock ?? 0,
-  Status: product.isActive ? "In Stock" : "Out of Stock",
+  Status: product.isActive ? "Live" : "Hidden",
   "Average Rating": product.averageRating ?? 0,
   "Number of Reviews": product.numOfReviews ?? 0,
   "Desktop Images": formatImageUrls(product.images?.desktop),

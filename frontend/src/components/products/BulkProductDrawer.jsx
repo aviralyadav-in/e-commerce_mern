@@ -29,9 +29,7 @@ const emptyRow = (categoryId = "") => ({
   stock: "",
   categoryId,
   subCategory: "Men",
-  isFeatured: false,
-  isBestSeller: false,
-  isNewArrival: false,
+  collections: [], // 🆕 Collections section se chuni hui collections (ids)
   images: [], // { file, preview, id }
 });
 
@@ -63,6 +61,7 @@ function BulkRow({
   row,
   index,
   categories,
+  collections,
   errors,
   open,
   canRemove,
@@ -77,6 +76,11 @@ function BulkRow({
   const availableSubCategories = selectedCategory?.subCategories?.length
     ? [...new Set(selectedCategory.subCategories)]
     : ["Men", "Women"];
+
+  // 🆕 Collections section ke active collections — dynamic options
+  const activeCollections = (collections || []).filter(
+    (c) => c.isActive !== false,
+  );
 
   const err = (f) => errors[f];
   const invalid = (f) => (errors[f] ? "is-invalid" : "");
@@ -213,29 +217,48 @@ function BulkRow({
             </Field>
           </div>
 
-          <div className="mt-3 flex flex-wrap items-center gap-4">
-            <span className="text-xs font-semibold uppercase tracking-wide text-(--ink-muted)">
-              Highlights
-            </span>
-            {[
-              ["isFeatured", "Featured"],
-              ["isBestSeller", "Best Seller"],
-              ["isNewArrival", "New Arrival"],
-            ].map(([flag, label]) => (
-              <label
-                key={flag}
-                className="flex cursor-pointer items-center gap-1.5 text-[13px] text-(--ink-soft)"
-              >
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 accent-emerald-600"
-                  checked={row[flag]}
-                  onChange={(e) => onChange({ [flag]: e.target.checked })}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+          {/* 🆕 Collections — Collections section se dynamic options */}
+          <Field
+            label="Collections"
+            optional
+            hint="Collections section me bani collections hi yahan dikhti hain."
+          >
+            {activeCollections.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {activeCollections.map((col) => {
+                  const checked = (row.collections || []).includes(col._id);
+                  return (
+                    <label
+                      key={col._id}
+                      className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 text-[12px] transition-colors ${
+                        checked
+                          ? "border-amber-500 bg-amber-50 font-semibold text-amber-700"
+                          : "border-(--border) bg-white text-(--ink-muted) hover:border-amber-400"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() =>
+                          onChange({
+                            collections: checked
+                              ? row.collections.filter((id) => id !== col._id)
+                              : [...row.collections, col._id],
+                          })
+                        }
+                        className="h-3.5 w-3.5 accent-amber-500"
+                      />
+                      {col.name}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="rounded-(--radius) border border-dashed border-(--border) bg-(--surface-sunken) px-3 py-2 text-xs text-(--ink-muted)">
+                No collections yet — Collections section me banayein.
+              </p>
+            )}
+          </Field>
 
           <div className="mt-3">
             <Field
@@ -310,6 +333,8 @@ function BulkRow({
 function BulkProductDrawer({ isOpen, onClose }) {
   const dispatch = useDispatch();
   const { categories } = useSelector((s) => s.categories);
+  // 🆕 Collections options ab naye Collections section se
+  const { collections } = useSelector((s) => s.collections);
 
   const [rows, setRows] = useState(() => [emptyRow(categories[0]?._id || "")]);
   const [errors, setErrors] = useState({});
@@ -406,9 +431,8 @@ function BulkProductDrawer({ isOpen, onClose }) {
       fd.append("categoryId", row.categoryId);
       fd.append("subCategory", row.subCategory);
       fd.append("isActive", true);
-      fd.append("isFeatured", row.isFeatured);
-      fd.append("isBestSeller", row.isBestSeller);
-      fd.append("isNewArrival", row.isNewArrival);
+      // 🆕 Collections — Collections section se chuni hui ids (JSON array)
+      fd.append("collections", JSON.stringify(row.collections || []));
       fd.append(
         "sku",
         `SKU-${Date.now().toString(36).toUpperCase()}-${i}-${Math.random()
@@ -549,6 +573,7 @@ function BulkProductDrawer({ isOpen, onClose }) {
               row={row}
               index={i}
               categories={categories}
+              collections={collections}
               errors={errors[row.key] || {}}
               open={openKey === row.key}
               canRemove={rows.length > 1 && !submitting}

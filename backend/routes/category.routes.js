@@ -5,9 +5,11 @@ import {
   bulkCreateCategories,
   createCategory,
   deleteCategory,
+  getAdminCategories,
   getCategories,
   getCategoryById,
   getCategoryProducts,
+  restoreCategory,
   updateCategory,
 } from "../controllers/category.controller.js";
 
@@ -17,6 +19,9 @@ import { protectedRoute } from "../middleware/auth.middleware.js";
 const categoryRouter = express.Router();
 
 categoryRouter.get("/", getCategories);
+
+// Admin — inactive (soft-deleted) categories bhi, restore UI ke liye
+categoryRouter.get("/admin/all", adminRoute, getAdminCategories);
 categoryRouter.get("/:id", getCategoryById);
 categoryRouter.get("/:id/products", getCategoryProducts);
 
@@ -41,6 +46,8 @@ categoryRouter.put(
   categoryUpload.single("image"),
   updateCategory,
 );
+
+categoryRouter.patch("/admin/:id/restore", adminRoute, restoreCategory);
 
 categoryRouter.delete("/admin/:id", adminRoute, deleteCategory);
 

@@ -6,7 +6,6 @@ import { fetchCategories } from "../features/categories/categoriesSlice";
 import { fetchProducts } from "../features/products/productsSlice";
 import { fetchOrders } from "../features/orders/ordersSlice";
 
-import PageHeader from "../components/common/PageHeader";
 import StatCard from "../components/common/StatCard";
 import Loader from "../components/common/Loader";
 import EmptyState from "../components/common/EmptyState";
@@ -45,8 +44,10 @@ const STATUS_BAR = {
 const DAY = 24 * 60 * 60 * 1000;
 const LOW_STOCK = 5;
 
-/** Cancelled orders never became money, so they stay out of revenue. */
-const isRevenue = (order) => order.orderStatus !== "Cancelled";
+/** Revenue = confirmed payments only. Pending COD/Card/UPI paisa nahi hua
+ *  (koi gateway "Completed" mark nahi karta), Cancelled bhi out. */
+const isRevenue = (order) =>
+  order.orderStatus !== "Cancelled" && order.paymentStatus === "Completed";
 
 /** Reference instant for the trailing-window comparisons. */
 const nowMs = () => Date.now();
@@ -68,9 +69,7 @@ const DashboardPage = () => {
   const dispatch = useDispatch();
 
   const { users, loading: usersLoading } = useSelector((state) => state.users);
-  const { categories, loading: catLoading } = useSelector(
-    (state) => state.categories,
-  );
+  const { loading: catLoading } = useSelector((state) => state.categories);
   const { products, loading: prodLoading } = useSelector(
     (state) => state.products,
   );
@@ -183,13 +182,9 @@ const DashboardPage = () => {
   return (
     <div className="page-shell space-y-6">
       {/* Welcome Hero Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-7 text-white shadow-xl shadow-slate-900/10 border border-slate-800">
-        <div
-          className="absolute -right-10 -top-10 w-72 h-72 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none"
-        />
-        <div
-          className="absolute right-1/3 -bottom-10 w-60 h-60 rounded-full bg-purple-500/15 blur-3xl pointer-events-none"
-        />
+      <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-7 text-white shadow-xl shadow-slate-900/10 border border-slate-800">
+        <div className="absolute -right-10 -top-10 w-72 h-72 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute right-1/3 -bottom-10 w-60 h-60 rounded-full bg-purple-500/15 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div>
@@ -205,7 +200,8 @@ const DashboardPage = () => {
               Welcome back, Admin 👋
             </h1>
             <p className="text-[13px] text-slate-300 mt-1 max-w-xl">
-              Here is your real-time store performance, sales momentum, and inventory health for today.
+              Here is your real-time store performance, sales momentum, and
+              inventory health for today.
             </p>
           </div>
 
@@ -278,7 +274,9 @@ const DashboardPage = () => {
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/60">
               <div>
                 <h2 className="admin-card-title text-[15px]">Order Pipeline</h2>
-                <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Status breakdown of current sales</p>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Status breakdown of current sales
+                </p>
               </div>
               <Link to="/orders" className="admin-link font-semibold">
                 Manage →
@@ -302,7 +300,10 @@ const DashboardPage = () => {
                           <span className="font-semibold">{status}</span>
                         </span>
                         <span className="text-slate-600 dark:text-slate-300 tabular-nums font-bold text-[12px]">
-                          {count} <span className="font-medium text-slate-400 dark:text-slate-500">({pct}%)</span>
+                          {count}{" "}
+                          <span className="font-medium text-slate-400 dark:text-slate-500">
+                            ({pct}%)
+                          </span>
                         </span>
                       </div>
                       <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800/80 overflow-hidden">
@@ -326,8 +327,15 @@ const DashboardPage = () => {
           </div>
 
           <div className="pt-4 mt-5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
-            <span>Active Volume: <b className="text-slate-800 dark:text-slate-200">{stats.openOrders} orders</b></span>
-            <span className="font-bold text-indigo-600 dark:text-indigo-400">Avg Order: {formatCurrency(stats.avgOrder, { compact: true })}</span>
+            <span>
+              Active Volume:{" "}
+              <b className="text-slate-800 dark:text-slate-200">
+                {stats.openOrders} orders
+              </b>
+            </span>
+            <span className="font-bold text-indigo-600 dark:text-indigo-400">
+              Avg Order: {formatCurrency(stats.avgOrder, { compact: true })}
+            </span>
           </div>
         </div>
       </div>
@@ -339,7 +347,9 @@ const DashboardPage = () => {
           <div className="admin-card-header">
             <div>
               <h2 className="admin-card-title">Inventory Alerts</h2>
-              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">Products requiring replenishment</p>
+              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">
+                Products requiring replenishment
+              </p>
             </div>
             <Link to="/products" className="admin-link">
               All Products
@@ -357,14 +367,19 @@ const DashboardPage = () => {
                 </thead>
                 <tbody>
                   {lowStock.map((product) => (
-                    <tr key={product._id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr
+                      key={product._id}
+                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                    >
                       <td className="max-w-50">
                         <span className="cell-strong block truncate text-[13px]">
                           {product.name}
                         </span>
                       </td>
                       <td>
-                        <span className="code-chip font-mono text-[11px]">{product.sku || "—"}</span>
+                        <span className="code-chip font-mono text-[11px]">
+                          {product.sku || "—"}
+                        </span>
                       </td>
                       <td className="text-right">
                         <span
@@ -400,7 +415,9 @@ const DashboardPage = () => {
           <div className="admin-card-header">
             <div>
               <h2 className="admin-card-title">Recent Transactions</h2>
-              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">Latest incoming customer orders</p>
+              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">
+                Latest incoming customer orders
+              </p>
             </div>
             <Link to="/orders" className="admin-link">
               View All Orders
@@ -420,7 +437,10 @@ const DashboardPage = () => {
                 </thead>
                 <tbody>
                   {recentOrders.map((order) => (
-                    <tr key={order._id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                    <tr
+                      key={order._id}
+                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                    >
                       <td>
                         <Link
                           to="/orders"
@@ -431,7 +451,7 @@ const DashboardPage = () => {
                       </td>
                       <td className="max-w-40">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-violet-600 text-white text-[10.5px] font-bold flex items-center justify-center shrink-0 shadow-xs">
+                          <div className="w-7 h-7 rounded-full bg-linear-to-tr from-indigo-500 to-violet-600 text-white text-[10.5px] font-bold flex items-center justify-center shrink-0 shadow-xs">
                             {typeof order.user === "object" && order.user?.name
                               ? order.user.name.charAt(0).toUpperCase()
                               : "C"}

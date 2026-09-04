@@ -3,7 +3,9 @@ import path from "path";
 import mongoose from "mongoose";
 import { productValidationSchema } from "../validators/productValidate.js";
 import { Category } from "../models/category.model.js";
+import { Collection } from "../models/collection.model.js";
 import { Product } from "../models/product.model.js";
+import { buildCollectionsCondition } from "../utils/collectionMatcher.js";
 import { csvToObjects, slugify, toBool } from "../utils/csvParser.js";
 
 /* =========================================================
@@ -52,6 +54,42 @@ const parseVariantsFromBody = (body) => {
   return Array.isArray(raw) ? raw : undefined;
 };
 
+
+// 🆕 FormData me collections JSON string aata hai — parse karke valid
+// ObjectId strings ki deduped array banao. Absent/invalid = undefined
+// (update me collections untouched rahenge, create me default [] lagega).
+const parseCollectionsFromBody = (body) => {
+  let raw = body.collections;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set();
+  const ids = [];
+  raw.forEach((id) => {
+    const s = String(id || "").trim();
+    if (mongoose.Types.ObjectId.isValid(s) && !seen.has(s)) {
+      seen.add(s);
+      ids.push(s);
+    }
+  });
+  return ids;
+};
+
+// 🆕 Sirf wahi collections rakho jo Collections section me sach me exist
+// karti hain — deleted/invalid ids silently drop ho jaati hain.
+const filterExistingCollections = async (ids = []) => {
+  if (!ids.length) return [];
+  const existing = await Collection.find({ _id: { $in: ids } })
+    .select("_id")
+    .lean();
+  const validIds = new Set(existing.map((c) => String(c._id)));
+  return ids.filter((id) => validIds.has(String(id)));
+};
 
 const deleteImageFile = async (imagePath) => {
   if (!imagePath) return;
@@ -112,17 +150,12 @@ export const createProduct = async (req, res) => {
   try {
     // 1. FormData fields ko parse karna (String to Number/Boolean)
     if (req.body.price) req.body.price = Number(req.body.price);
-    if (req.body.discountPrice)
-      req.body.discountPrice = Number(req.body.discountPrice);
+    // Sale price clear bhi kar sakte hain — empty/0 → null
+    if (req.body.discountPrice !== undefined)
+      req.body.discountPrice = Number(req.body.discountPrice) || null;
     if (req.body.stock) req.body.stock = Number(req.body.stock);
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
-
-    // Collection flags — FormData se "true"/"false" string aata hai
-    ["isFeatured", "isBestSeller", "isNewArrival"].forEach((key) => {
-      if (req.body[key] !== undefined)
-        req.body[key] = req.body[key] === "true" || req.body[key] === true;
-    });
 
     // 2. Images extract karna
     req.body.images = extractImages(req);
@@ -136,6 +169,14 @@ export const createProduct = async (req, res) => {
       );
     } else {
       delete req.body.variants; // invalid/absent — schema default [] use hoga
+    }
+
+    // 2c. 🆕 Collections parse — Collections section se linked ids
+    const parsedCollections = parseCollectionsFromBody(req.body);
+    if (parsedCollections !== undefined) {
+      req.body.collections = parsedCollections;
+    } else {
+      delete req.body.collections; // absent — schema default [] use hoga
     }
 
     // 3. Zod Validation
@@ -166,6 +207,13 @@ export const createProduct = async (req, res) => {
       const uploadedPaths = getUploadedFilesPaths(req.files);
       await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
       return res.status(404).json({ message: "Category not found" });
+    }
+
+    // 5b. 🆕 Collections — sirf existing (Collections section wali) ids rakho
+    if (result.data.collections?.length) {
+      result.data.collections = await filterExistingCollections(
+        result.data.collections,
+      );
     }
 
     // 5. Unique Check (Slug & SKU)
@@ -208,7 +256,8 @@ export const getProducts = async (req, res) => {
       order = "desc",
       categoryId,
       subCategory,
-      collection,
+      collections,
+      homeFeatured,
       onSale,
       isActive,
       inStock,
@@ -236,14 +285,70 @@ export const getProducts = async (req, res) => {
       filter.subCategory = { $in: String(subCategory).split(",").filter(Boolean) };
     }
 
-    // Collection tags — featured / best / new (comma-separated)
-    if (collection) {
-      const tags = String(collection).split(",").map((t) => t.trim());
-      const tagConditions = [];
-      if (tags.includes("featured")) tagConditions.push({ isFeatured: true });
-      if (tags.includes("best")) tagConditions.push({ isBestSeller: true });
-      if (tags.includes("new")) tagConditions.push({ isNewArrival: true });
-      if (tagConditions.length) andConditions.push({ $or: tagConditions });
+    // 🆕 Home page curation — homeFeatured=true → sirf un collections ke
+    // products jin par admin ne "Show this collection on the home page"
+    // checkbox lagaya hai (home ka Featured Pieces section inhi se bharta hai).
+    // Koi collection feature nahi hui → empty array; storefront apna
+    // fallback use karta hai.
+    if (homeFeatured === "true") {
+      filter.isActive = true; // homepage par sirf live products
+
+      const featuredCols = await Collection.find({
+        showOnHomePage: true,
+        isActive: true,
+      })
+        .select("_id")
+        .lean();
+
+      if (!featuredCols.length) {
+        return res.status(200).json({
+          message: "No collection is featured on the home page",
+          pagination: {
+            currentPage: Number(page),
+            totalPages: 0,
+            totalProducts: 0,
+            limit: Number(limit),
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+          availableColors: [],
+          products: [],
+        });
+      }
+
+      const condition = await buildCollectionsCondition(
+        Collection,
+        featuredCols.map((c) => c._id),
+      );
+      if (!condition) {
+        return res.status(200).json({
+          message: "No products matched the featured collections",
+          pagination: {
+            currentPage: Number(page),
+            totalPages: 0,
+            totalProducts: 0,
+            limit: Number(limit),
+            hasNextPage: false,
+            hasPrevPage: false,
+          },
+          availableColors: [],
+          products: [],
+        });
+      }
+      andConditions.push(condition);
+    }
+
+    // 🆕 Collections filter — comma-separated collection (category) ids.
+    // Shop page ka dynamic "Collections" filter isi param se chalta hai.
+    if (collections) {
+      const colIds = String(collections)
+        .split(",")
+        .map((id) => id.trim())
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (colIds.length) {
+        const condition = await buildCollectionsCondition(Collection, colIds);
+        if (condition) andConditions.push(condition);
+      }
     }
 
     // Sale — sirf discounted products (discountPrice < price)
@@ -301,6 +406,7 @@ export const getProducts = async (req, res) => {
     const [products, totalProducts] = await Promise.all([
       Product.find(filter)
         .populate("categoryId", "name image") // Corrected populate reference
+        .populate("collections", "name slug showAsBadge") // 🆕 Collections section names
         .sort(sortOptions)
         .skip(skip)
         .limit(Number(limit))
@@ -360,6 +466,7 @@ export const getProductById = async (req, res) => {
 
     const product = await Product.findById(id)
       .populate("categoryId", "name description image") // Corrected populate reference
+      .populate("collections", "name slug showAsBadge") // 🆕 Collections section names
       .lean();
 
     if (!product) {
@@ -394,26 +501,28 @@ export const updateProduct = async (req, res) => {
 
     // 1. Parse incoming FormData
     if (req.body.price) req.body.price = Number(req.body.price);
-    if (req.body.discountPrice)
-      req.body.discountPrice = Number(req.body.discountPrice);
+    // Sale price clear bhi kar sakte hain — empty/0 → null
+    if (req.body.discountPrice !== undefined)
+      req.body.discountPrice = Number(req.body.discountPrice) || null;
     if (req.body.stock) req.body.stock = Number(req.body.stock);
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
-    // Collection flags — FormData se "true"/"false" string aata hai
-    ["isFeatured", "isBestSeller", "isNewArrival"].forEach((key) => {
-      if (req.body[key] !== undefined)
-        req.body[key] = req.body[key] === "true" || req.body[key] === true;
-    });
-
     // 2. Extract new images
     const newImages = extractImages(req);
 
-    // Agar kisi device type ki nayi file aayi hai, toh usko body me append karein
-    if (!req.body.images) req.body.images = {};
-    if (newImages.desktop.length > 0)
-      req.body.images.desktop = newImages.desktop;
-    if (newImages.mobile.length > 0) req.body.images.mobile = newImages.mobile;
+    // Agar kisi device type ki nayi file aayi hai, TABHI images body me bhejein.
+    // Khali {} bhejne par zod ka images.desktop (required array) undefined par
+    // fail hota hai: "expected array, received undefined". No-upload edit me
+    // images key absent rehne do - partial() use skip karega aur retained
+    // images niche ke merge logic se hi final images banengi.
+    if (newImages.desktop.length > 0 || newImages.mobile.length > 0) {
+      req.body.images = {};
+      if (newImages.desktop.length > 0)
+        req.body.images.desktop = newImages.desktop;
+      if (newImages.mobile.length > 0)
+        req.body.images.mobile = newImages.mobile;
+    }
 
     // 2b. 🆕 Variants parse — FormData me JSON string aata hai.
     // Absent/invalid = variants untouched (partial update me wipe na ho).
@@ -425,6 +534,15 @@ export const updateProduct = async (req, res) => {
       );
     } else {
       delete req.body.variants;
+    }
+
+    // 2c. 🆕 Collections parse — absent/invalid = untouched (wipe na ho);
+    // present (even empty array) = collections replace ho jaayengi.
+    const parsedCollections = parseCollectionsFromBody(req.body);
+    if (parsedCollections !== undefined) {
+      req.body.collections = await filterExistingCollections(parsedCollections);
+    } else {
+      delete req.body.collections;
     }
 
     // 3. Partial Zod Validation
@@ -548,7 +666,38 @@ export const updateProduct = async (req, res) => {
 };
 
 /* =========================================================
-   DELETE PRODUCT
+   RESTORE PRODUCT (undo soft delete)
+========================================================= */
+export const restoreProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid product ID" });
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      id,
+      { isActive: true },
+      { new: true },
+    );
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    return res.status(200).json({
+      message: "Product restored successfully",
+      product,
+    });
+  } catch (error) {
+    console.error("Restore Product Error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+/* =========================================================
+   DELETE PRODUCT (SOFT DELETE)
 ========================================================= */
 export const deleteProduct = async (req, res) => {
   try {
@@ -564,17 +713,13 @@ export const deleteProduct = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    await Product.findByIdAndDelete(id);
-
-    // Product ki saari nested local images delete karo
-    const allImages = [
-      ...(product.images?.desktop || []),
-      ...(product.images?.mobile || []),
-    ];
-    await Promise.all(allImages.map((img) => deleteImageFile(img)));
+    // SOFT delete — storefront se sirf hide hota hai.
+    // Disk images aur order history dono safe rehte hain; admin
+    // PATCH /admin/:id/restore se wapas live kar sakta hai.
+    await Product.findByIdAndUpdate(id, { isActive: false });
 
     return res.status(200).json({
-      message: "Product deleted successfully",
+      message: "Product hidden from storefront (soft deleted)",
     });
   } catch (error) {
     console.error("Delete Product Error:", error);
@@ -593,8 +738,7 @@ export const deleteProduct = async (req, res) => {
 
    Required columns : name, description, price, stock, images
    Optional columns : brand, subCategory, discountPrice, sku,
-                      mobileImages, category_name, isActive,
-                      isFeatured, isBestSeller, isNewArrival
+                      mobileImages, category_name, isActive
 
    - slug naam se auto-generate (+ uniqueness suffix)
    - SKU missing ho to auto-generate; duplicate SKU rows skip
@@ -741,10 +885,15 @@ export const bulkCreateProducts = async (req, res) => {
         rowCategoryId = matched;
       }
 
-      // --- Sub-category ---
-      const subCategory = (row.subcategory || "").trim();
-      if (subCategory && !["Men", "Women", "Unisex"].includes(subCategory))
-        return fail("'subCategory' must be Men, Women or Unisex");
+      // --- Sub-category (multi) - "Men", "Women" ya comma-separated "Men,Women" ---
+      const subCategory = (row.subcategory || "")
+        .split(",")
+        .map((v) => v.trim())
+        .filter((v) => v === "Men" || v === "Women");
+      if ((row.subcategory || "").trim() && subCategory.length === 0)
+        return fail(
+          "'subCategory' must be Men, Women or comma-separated (Men,Women)",
+        );
 
       // --- SKU: diya gaya ho to uniqueness check, warna auto-generate ---
       let sku = (row.sku || "").trim().toUpperCase();
@@ -768,16 +917,13 @@ export const bulkCreateProducts = async (req, res) => {
         slug: uniqueSlug(baseSlug),
         description,
         brand: (row.brand || "").trim(),
-        subCategory: subCategory || "Unisex",
+        subCategory: subCategory.length ? subCategory : ["Men"],
         images: { desktop, mobile },
         price,
         discountPrice,
         sku,
         stock,
         isActive: toBool(row.isactive, true),
-        isFeatured: toBool(row.isfeatured, false),
-        isBestSeller: toBool(row.isbestseller, false),
-        isNewArrival: toBool(row.isnewarrival, false),
       });
     });
 

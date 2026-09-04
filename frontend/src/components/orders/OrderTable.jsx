@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import {
-  updateOrderStatus,
-  deleteOrder,
-} from "../../features/orders/ordersSlice";
+import { updateOrderStatus } from "../../features/orders/ordersSlice";
 import useTableControls from "../../hooks/useTableControls";
 import ConfirmDialog from "../common/ConfirmDialog";
 import EmptyState from "../common/EmptyState";
@@ -15,7 +12,7 @@ import {
   initials,
   shortId,
 } from "../../utils/format";
-import { ClipboardIcon, EyeIcon, TrashIcon } from "../common/Icon";
+import { ClipboardIcon, EyeIcon, XIcon } from "../common/Icon";
 import { ORDER_STATUSES } from "../../utils/orderStatuses";
 
 /** Sorting by status should follow the fulfilment pipeline, not the alphabet. */
@@ -39,10 +36,18 @@ const PAYMENT_BADGE = {
   Refunded: "badge-info",
 };
 
+// Admin payment confirm control — no gateway, toh manually mark hota hai
+const PAYMENT_SELECT = {
+  Pending: "border-orange-200 bg-orange-50 text-orange-700",
+  Completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  Failed: "border-red-200 bg-red-50 text-red-700",
+  Refunded: "border-blue-200 bg-blue-50 text-blue-700",
+};
+
 const OrderTable = ({ orders, onView }) => {
   const dispatch = useDispatch();
   const { users } = useSelector((state) => state.users);
-  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [cancelTarget, setCancelTarget] = useState(null);
 
   const getCustomerName = (user) => {
     if (typeof user === "object" && user?.name) return user.name;
@@ -63,10 +68,12 @@ const OrderTable = ({ orders, onView }) => {
     pageSize: 10,
   });
 
-  const handleConfirmDelete = () => {
-    if (!deleteTarget) return;
-    dispatch(deleteOrder(deleteTarget._id));
-    setDeleteTarget(null);
+  const handleConfirmCancel = () => {
+    if (!cancelTarget) return;
+    dispatch(
+      updateOrderStatus({ id: cancelTarget._id, orderStatus: "Cancelled" }),
+    );
+    setCancelTarget(null);
   };
 
   return (
@@ -159,15 +166,30 @@ const OrderTable = ({ orders, onView }) => {
                         <p className="cell-strong text-slate-800 text-[12.5px]">
                           {order.paymentMethod || "Online"}
                         </p>
-                        <span
-                          className={`badge mt-1 ${
-                            PAYMENT_BADGE[order.paymentStatus] ||
-                            "badge-neutral"
+                        <select
+                          value={order.paymentStatus || "Pending"}
+                          onChange={(e) =>
+                            dispatch(
+                              updateOrderStatus({
+                                id: order._id,
+                                paymentStatus: e.target.value,
+                              }),
+                            )
+                          }
+                          aria-label={`Payment status for ${shortId(order._id)}`}
+                          className={`mt-1 px-2 py-1 rounded-lg text-[11.5px] font-bold border outline-none cursor-pointer transition-all shadow-xs ${
+                            PAYMENT_SELECT[order.paymentStatus] ||
+                            "border-slate-200 bg-white text-slate-800"
                           }`}
                         >
-                          <span className="badge-dot" />
-                          {order.paymentStatus || "Unknown"}
-                        </span>
+                          {["Pending", "Completed", "Failed", "Refunded"].map(
+                            (ps) => (
+                              <option key={ps} value={ps}>
+                                {ps}
+                              </option>
+                            ),
+                          )}
+                        </select>
                       </td>
                       <td>
                         <select
@@ -203,14 +225,17 @@ const OrderTable = ({ orders, onView }) => {
                           >
                             <EyeIcon className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => setDeleteTarget(order)}
-                            className="icon-btn icon-btn-delete"
-                            title="Delete order"
-                            aria-label={`Delete ${shortId(order._id)}`}
-                          >
-                            <TrashIcon className="w-3.5 h-3.5" />
-                          </button>
+                          {order.orderStatus !== "Cancelled" &&
+                            order.orderStatus !== "Delivered" && (
+                              <button
+                                onClick={() => setCancelTarget(order)}
+                                className="icon-btn icon-btn-delete"
+                                title="Cancel order"
+                                aria-label={`Cancel ${shortId(order._id)}`}
+                              >
+                                <XIcon className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                         </div>
                       </td>
                     </tr>
@@ -245,17 +270,17 @@ const OrderTable = ({ orders, onView }) => {
       </div>
 
       <ConfirmDialog
-        isOpen={!!deleteTarget}
-        title="Delete order?"
+        isOpen={!!cancelTarget}
+        title="Cancel order?"
         message={
-          deleteTarget
-            ? `Order ${shortId(deleteTarget._id)} will be permanently deleted. Consider marking it Cancelled instead if you need the record.`
+          cancelTarget
+            ? `Order ${shortId(cancelTarget._id)} will be marked Cancelled. Product stock goes back to inventory and the record stays in history for audit/refund.`
             : ""
         }
-        confirmLabel="Delete order"
+        confirmLabel="Cancel order"
         variant="danger"
-        onConfirm={handleConfirmDelete}
-        onCancel={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmCancel}
+        onCancel={() => setCancelTarget(null)}
       />
     </>
   );

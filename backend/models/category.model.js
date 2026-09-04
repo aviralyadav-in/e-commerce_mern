@@ -47,6 +47,13 @@ const categorySchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    // 🆕 Hierarchy — parent category (jaise Bags under Men). Null = top-level.
+    parentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      default: null,
+    },
   },
   {
     timestamps: true,

@@ -34,14 +34,19 @@ const productSchema = new mongoose.Schema(
       default: "",
     },
 
-    // Men / Women / Unisex under parent category
+    // Men / Women under parent category - multi-select array
+    // (ek product Men + Women dono ke liye ho sakta hai)
     subCategory: {
-      type: String,
+      type: [String],
       enum: {
-        values: ["Men", "Women", "Unisex"],
-        message: "Sub-category must be Men, Women, or Unisex",
+        values: ["Men", "Women"],
+        message: "Sub-category must be Men or Women",
       },
-      default: "Unisex",
+      default: ["Men"],
+      validate: {
+        validator: (val) => Array.isArray(val) && val.length > 0,
+        message: "Select at least one sub-category (Men or Women).",
+      },
     },
 
     // 🔥 IMAGE SCHEMA UPDATED HERE 🔥
@@ -99,19 +104,15 @@ const productSchema = new mongoose.Schema(
       default: 0,
     },
 
-    // Collection flags — Shop page filters & badges ke liye
-    isFeatured: {
-      type: Boolean,
-      default: false,
-    },
-    isBestSeller: {
-      type: Boolean,
-      default: false,
-    },
-    isNewArrival: {
-      type: Boolean,
-      default: false,
-    },
+    // 🆕 Collections — Collections section (categories) se linked multi-select.
+    // Ek product multiple collections me ho sakta hai; Shop page ka
+    // "Collections" filter inhi se chalta hai.
+    collections: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Collection",
+      },
+    ],
 
     // 🆕 Color variants — jaise Black / Brown, har variant ki apni images.
     // Simple model: price/stock product-level par hi rehte hain (live

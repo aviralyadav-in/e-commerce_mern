@@ -29,7 +29,7 @@ export const downloadCategoriesSampleCsv = () => {
 /** POST /api/products/admin/bulk ke liye template */
 export const downloadProductsSampleCsv = () => {
   const content = [
-    "name,description,price,stock,images,brand,subCategory,discountPrice,sku,category_name,isActive,isFeatured,isBestSeller,isNewArrival",
+    "name,description,price,stock,images,brand,subCategory,discountPrice,sku,category_name,isActive",
     [
       '"Classic Leather Tote"',
       '"Handcrafted genuine leather tote bag with spacious interior."',
@@ -42,9 +42,6 @@ export const downloadProductsSampleCsv = () => {
       "",
       "Tote Bags",
       "true",
-      "false",
-      "true",
-      "false",
     ].join(","),
     [
       '"Urban Laptop Backpack"',
@@ -57,9 +54,6 @@ export const downloadProductsSampleCsv = () => {
       "",
       "", // SKU khali = auto-generate
       "", // category_name khali = dropdown wali category
-      "true",
-      "true",
-      "false",
       "true",
     ].join(","),
   ].join("\n");

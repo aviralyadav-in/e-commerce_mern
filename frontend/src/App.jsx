@@ -6,6 +6,7 @@ import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import UsersPage from "./pages/UsersPage";
 import CategoriesPage from "./pages/CategoriesPage";
+import CollectionsPage from "./pages/CollectionsPage";
 import ProductsPage from "./pages/ProductsPage";
 import OrdersPage from "./pages/OrdersPage";
 import BannersPage from "./pages/BannersPage";
@@ -31,6 +32,7 @@ function App() {
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="categories" element={<CategoriesPage />} />
+        <Route path="collections" element={<CollectionsPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="banners" element={<BannersPage />} />

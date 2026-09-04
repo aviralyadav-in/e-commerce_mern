@@ -6,8 +6,10 @@ export const fetchCategories = createAsyncThunk(
   "categories/fetchAll",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await API.get("/categories");
-      // Mapping categories array from response.data.categories
+      // Admin endpoint — inactive (soft-deleted) categories bhi aati hain,
+      // warna restore kabhi possible nahi tha. Storefront apna public
+      // GET /categories use karta hai (sirf active).
+      const response = await API.get("/categories/admin/all");
       return response.data.categories || [];
     } catch (error) {
       return rejectWithValue(
@@ -62,6 +64,19 @@ export const deleteCategory = createAsyncThunk(
   },
 );
 
+// 🆕 Soft-deleted (inactive) category ko wapas active karo
+export const restoreCategory = createAsyncThunk(
+  "categories/restore",
+  async (categoryId, { rejectWithValue }) => {
+    try {
+      const response = await API.patch(`/categories/admin/${categoryId}/restore`);
+      return response.data.category;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || "Error restoring category");
+    }
+  },
+);
+
 // 🆕 Bulk Import Categories via CSV
 export const bulkCreateCategories = createAsyncThunk(
   "categories/bulkCreate",
@@ -85,9 +100,7 @@ const categoriesSlice = createSlice({
     categories: [],
     loading: false,
     error: null,
-    deleteLoading: false, // Delete ke liye alag loading
-    // Kyunki delete mein time lagta hai
-    // products bhi delete ho rahe hain saath mein
+    deleteLoading: false, // Delete (soft) ke liye alag loading
   },
   reducers: {
     clearCategoryError: (state) => {
@@ -143,9 +156,8 @@ const categoriesSlice = createSlice({
         state.error = action.payload;
       })
 
-      // Delete Category
-      // Ye thoda slow hoga kyunki pehle products delete
-      // honge phir category delete hogi
+      // Delete Category — backend soft-delete karta hai (isActive: false);
+      // products delete NAHI hote, category Inactive filter me restore hoti hai
       .addCase(deleteCategory.pending, (state) => {
         state.deleteLoading = true;
         state.error = null;
@@ -158,6 +170,27 @@ const categoriesSlice = createSlice({
         );
       })
       .addCase(deleteCategory.rejected, (state, action) => {
+        state.deleteLoading = false;
+        state.error = action.payload;
+      })
+
+      // 🆕 Restore — inactive category wapas active
+      .addCase(restoreCategory.pending, (state) => {
+        state.deleteLoading = true;
+        state.error = null;
+      })
+      .addCase(restoreCategory.fulfilled, (state, action) => {
+        state.deleteLoading = false;
+        const index = state.categories.findIndex(
+          (cat) => cat._id === action.payload._id,
+        );
+        if (index !== -1) {
+          state.categories[index] = action.payload;
+        } else {
+          state.categories.push(action.payload);
+        }
+      })
+      .addCase(restoreCategory.rejected, (state, action) => {
         state.deleteLoading = false;
         state.error = action.payload;
       })

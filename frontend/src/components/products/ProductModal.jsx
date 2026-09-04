@@ -12,21 +12,37 @@ import { CheckIcon, ImageIcon, PackageIcon, PlusIcon, XIcon } from "../common/Ic
 
 const MAX_IMAGES = 5;
 
+// Collections normalise — populated objects ({ _id, name }) ya plain ids
+// dono se ObjectId strings ki clean array banao.
+const toCollectionIds = (collections) =>
+  (Array.isArray(collections) ? collections : [])
+    .map((c) =>
+      typeof c === "object" && c?._id ? String(c._id) : String(c || ""),
+    )
+    .filter(Boolean);
+
 const ProductModal = ({ isOpen, onClose, editData }) => {
   const dispatch = useDispatch();
   const { loading, error } = useSelector((state) => state.products);
   const { categories } = useSelector((state) => state.categories);
+  // 🆕 Collections ab Collections section (naya) se aate hain
+  const { collections: allCollections } = useSelector(
+    (state) => state.collections,
+  );
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
+  const [discountPrice, setDiscountPrice] = useState("");
+  const [brand, setBrand] = useState("");
+  // Visibility alag cheez hai — stock 0 hona "hidden" nahi hota
+  const [isHidden, setIsHidden] = useState(false);
   const [stock, setStock] = useState("");
-  const [status, setStatus] = useState("In Stock");
   const [categoryId, setCategoryId] = useState("");
-  const [subCategory, setSubCategory] = useState("Men");
-  const [isFeatured, setIsFeatured] = useState(false);
-  const [isBestSeller, setIsBestSeller] = useState(false);
-  const [isNewArrival, setIsNewArrival] = useState(false);
+  // Multi-select — ek product Men + Women dono ke liye ho sakta hai
+  const [subCategories, setSubCategories] = useState(["Men"]);
+  // 🆕 Collections — Collections section (categories) se dynamic multi-select
+  const [selectedCollections, setSelectedCollections] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
   const [newImages, setNewImages] = useState([]);
   // 🆕 Color variants — { name, images (retained URLs), newFiles: [{file, preview, id}] }
@@ -37,10 +53,27 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
   const totalImageCount = existingImages.length + newImages.length;
 
   const selectedCategory = categories.find((c) => c._id === categoryId);
-  // Sirf Men / Women — Uniselect option nahi rahega (requirement ke hisaab se)
+  // Sirf Men / Women — ab multi-select (ek product dono ke liye ho sakta hai)
   const availableSubCategories = selectedCategory?.subCategories?.length
     ? [...new Set(selectedCategory.subCategories)]
     : ["Men", "Women"];
+
+  // 🆕 Collections section ke active collections — product form me dynamically
+  // yahi dikhenge (koi hardcoded options nahi).
+  const activeCollections = allCollections.filter((c) => c.isActive !== false);
+
+  const toggleCollection = (collectionId) =>
+    setSelectedCollections((prev) =>
+      prev.includes(collectionId)
+        ? prev.filter((id) => id !== collectionId)
+        : [...prev, collectionId],
+    );
+
+  // Sub-category multi-select toggle - Men + Women dono select ho sakte hain
+  const toggleSubCategory = (value) =>
+    setSubCategories((prev) =>
+      prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
+    );
 
   // Re-seed form state whenever the drawer opens for a different record,
   // or when categories finish loading (create-mode default category).
@@ -52,18 +85,22 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
         setName(editData.name || editData.title || "");
         setDescription(editData.description || "");
         setPrice(editData.price || "");
-        setStock(editData.stock || "");
-        setStatus(editData.isActive !== false ? "In Stock" : "Out of Stock");
-        setCategoryId(editData.categoryId?._id || editData.categoryId || "");
-        // Purane products agar 'Unisex' the to bhi ab valid option hi pre-select ho
-        setSubCategory(
-          ["Men", "Women"].includes(editData.subCategory)
-            ? editData.subCategory
-            : "Men",
+        setDiscountPrice(
+          editData.discountPrice != null ? String(editData.discountPrice) : "",
         );
-        setIsFeatured(!!editData.isFeatured);
-        setIsBestSeller(!!editData.isBestSeller);
-        setIsNewArrival(!!editData.isNewArrival);
+        setBrand(editData.brand || "");
+        setIsHidden(editData.isActive === false);
+        setStock(editData.stock || "");
+        setCategoryId(editData.categoryId?._id || editData.categoryId || "");
+        // Purane products ki subCategory string ho sakti hai - array me
+        // normalize karo; invalid values (jaise 'Unisex') filter ho jayengi
+        const seededSubs = Array.isArray(editData.subCategory)
+          ? editData.subCategory.filter((s) => ["Men", "Women"].includes(s))
+          : ["Men", "Women"].includes(editData.subCategory)
+            ? [editData.subCategory]
+            : [];
+        setSubCategories(seededSubs.length ? seededSubs : ["Men"]);
+        setSelectedCollections(toCollectionIds(editData.collections));
         setExistingImages(editData.images?.desktop || []);
         setNewImages([]);
         setVariants(
@@ -77,13 +114,13 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
         setName("");
         setDescription("");
         setPrice("");
+        setDiscountPrice("");
+        setBrand("");
+        setIsHidden(false);
         setStock("");
-        setStatus("In Stock");
         setCategoryId(categories.length > 0 ? categories[0]._id : "");
-        setSubCategory("Men");
-        setIsFeatured(false);
-        setIsBestSeller(false);
-        setIsNewArrival(false);
+        setSubCategories(["Men"]);
+        setSelectedCollections([]);
         setExistingImages([]);
         setNewImages([]);
         setVariants([]);
@@ -118,6 +155,8 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     const n = "name" in fields ? fields.name : name;
     const d = "description" in fields ? fields.description : description;
     const p = "price" in fields ? fields.price : price;
+    const dp =
+      "discountPrice" in fields ? fields.discountPrice : discountPrice;
     const s = "stock" in fields ? fields.stock : stock;
     const cat = "categoryId" in fields ? fields.categoryId : categoryId;
 
@@ -129,6 +168,10 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
 
     if (!cat) errs.categoryId = "Please select a category.";
 
+    // Sub-category - kam se kam ek select karna zaroori
+    if (subCategories.length === 0)
+      errs.subCategory = "Select at least one sub-category (Men or Women).";
+
     if (p === "" || p === null || p === undefined)
       errs.price = "Price is required.";
     else if (Number(p) < 0) errs.price = "Price cannot be negative.";
@@ -136,6 +179,12 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     if (s === "" || s === null || s === undefined)
       errs.stock = "Stock is required.";
     else if (Number(s) < 0) errs.stock = "Stock cannot be negative.";
+
+    // Sale price ka rule — regular price se kam hona chahiye
+    if (dp !== "" && dp !== null && dp !== undefined && Number(dp) > 0) {
+      if (Number(dp) >= Number(p))
+        errs.discountPrice = "Sale price must be less than the regular price.";
+    }
 
     const imageErr = getImageError();
     if (imageErr) errs.images = imageErr;
@@ -276,14 +325,34 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
 
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
+  /**
+   * Category dropdown options with hierarchy paths (e.g. "Bags › Laptop
+   * Bags"), sorted alphabetically — same treatment as the category form.
+   */
+  const categoryOptions = (() => {
+    const namesById = new Map(categories.map((c) => [String(c._id), c.name]));
+    return categories
+      .map((c) => {
+        const pid = c.parentId ? String(c.parentId._id || c.parentId) : null;
+        const parentName = pid ? namesById.get(pid) : null;
+        return {
+          id: String(c._id),
+          label: parentName ? `${parentName} › ${c.name}` : c.name,
+        };
+      })
+      .sort((a, b) => a.label.localeCompare(b.label));
+  })();
+
   const handleSubmit = (e) => {
     e.preventDefault();
     setTouched({
       name: true,
       description: true,
       price: true,
+      discountPrice: true,
       stock: true,
       categoryId: true,
+      subCategory: true,
       images: true,
     });
     const errs = validate();
@@ -295,13 +364,21 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     formData.append("description", description || "No description provided");
     formData.append("slug", slug);
     formData.append("price", Number(price));
+    // Sale price — khali ho to null bhejo (existing sale remove ho jayegi)
+    formData.append(
+      "discountPrice",
+      discountPrice !== "" && Number(discountPrice) > 0
+        ? Number(discountPrice)
+        : "",
+    );
+    formData.append("brand", brand);
     formData.append("stock", Number(stock));
     formData.append("categoryId", categoryId);
-    formData.append("subCategory", subCategory);
-    formData.append("isActive", status !== "Out of Stock");
-    formData.append("isFeatured", isFeatured);
-    formData.append("isBestSeller", isBestSeller);
-    formData.append("isNewArrival", isNewArrival);
+    formData.append("subCategory", JSON.stringify(subCategories));
+    // Visibility aur stock alag concepts hain
+    formData.append("isActive", !isHidden);
+    // 🆕 Collections — Collections section se chune gaye ids (JSON array)
+    formData.append("collections", JSON.stringify(selectedCollections));
 
     if (!editData) {
       formData.append("sku", `SKU-${Date.now()}`);
@@ -411,6 +488,13 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
           required
           htmlFor="prod-desc"
           error={err("description")}
+          hint={
+            err("description")
+              ? undefined
+              : description.trim()
+                ? `${description.length} / 5000 characters`
+                : "Materials, fit and features shoppers read before buying."
+          }
         >
           <textarea
             id="prod-desc"
@@ -442,8 +526,14 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
                 const allowed = cat?.subCategories?.length
                   ? [...new Set(cat.subCategories)]
                   : ["Men", "Women"];
-                if (!allowed.includes(subCategory)) {
-                  setSubCategory(allowed[0] || "Men");
+                // Naye category ke allowed options ke hisaab se selection filter
+                const filteredSubs = subCategories.filter((s) =>
+                  allowed.includes(s),
+                );
+                if (filteredSubs.length === 0) {
+                  setSubCategories(allowed.slice(0, 1));
+                } else if (filteredSubs.length !== subCategories.length) {
+                  setSubCategories(filteredSubs);
                 }
                 revalidate("categoryId", e.target.value);
               }}
@@ -453,9 +543,9 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
               <option value="" disabled>
                 Select a category
               </option>
-              {categories.map((cat) => (
-                <option key={cat._id} value={cat._id}>
-                  {cat.name}
+              {categoryOptions.map((cat) => (
+                <option key={cat.id} value={cat.id}>
+                  {cat.label}
                 </option>
               ))}
             </select>
@@ -464,62 +554,75 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
           <Field
             label="Sub-category"
             required
-            htmlFor="prod-subcategory"
-            hint="Limited to what the category allows."
+            hint="Pick every audience that applies — options come from the selected category."
+            error={touched.subCategory ? errors.subCategory : undefined}
           >
-            <select
-              id="prod-subcategory"
-              value={subCategory}
-              onChange={(e) => setSubCategory(e.target.value)}
-              className="form-select"
-            >
-              {availableSubCategories.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap gap-2">
+              {availableSubCategories.map((opt) => {
+                const checked = subCategories.includes(opt);
+                return (
+                  <label
+                    key={opt}
+                    className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                      checked
+                        ? "border-amber-500 bg-amber-50 font-semibold text-amber-700"
+                        : "border-(--border) bg-(--surface-sunken) text-zinc-600 hover:border-amber-400"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleSubCategory(opt)}
+                      className="h-4 w-4 accent-amber-500"
+                    />
+                    {opt}
+                  </label>
+                );
+              })}
+            </div>
           </Field>
         </div>
 
-        {/* Collection flags — Shop page filters & badges */}
+        {/* 🆕 Collections — options Collections section se dynamically aate hain */}
         <div className="form-row">
           <div>
             <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-400">
-              Highlights
+              Collections
             </span>
-            <div className="flex flex-wrap gap-5 pt-1">
-              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isFeatured}
-                  onChange={(e) => setIsFeatured(e.target.checked)}
-                  className="h-4 w-4 accent-amber-500"
-                />
-                Featured
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isBestSeller}
-                  onChange={(e) => setIsBestSeller(e.target.checked)}
-                  className="h-4 w-4 accent-amber-500"
-                />
-                Best Seller
-              </label>
-              <label className="flex cursor-pointer items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={isNewArrival}
-                  onChange={(e) => setIsNewArrival(e.target.checked)}
-                  className="h-4 w-4 accent-amber-500"
-                />
-                New Arrival
-              </label>
-            </div>
+            {activeCollections.length > 0 ? (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {activeCollections.map((col) => {
+                  const checked = selectedCollections.includes(col._id);
+                  return (
+                    <label
+                      key={col._id}
+                      className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                        checked
+                          ? "border-amber-500 bg-amber-50 font-semibold text-amber-700"
+                          : "border-(--border) bg-(--surface-sunken) text-zinc-600 hover:border-amber-400"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleCollection(col._id)}
+                        className="h-4 w-4 accent-amber-500"
+                      />
+                      {col.name}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="rounded-(--radius) border border-dashed border-(--border) bg-(--surface-sunken) px-3 py-2.5 text-xs text-zinc-500">
+                No collections yet — create one in the Collections section and
+                it will appear here automatically.
+              </p>
+            )}
             <p className="mt-1.5 text-xs text-zinc-500">
-              Shop page ke &quot;Collection&quot; filters aur product badges in flags se
-              chalte hain.
+              These options come from your Collections section — a product can
+              belong to multiple collections. They power the &quot;Collections&quot;
+              filter on the shop page.
             </p>
           </div>
         </div>
@@ -575,19 +678,58 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
           </Field>
         </div>
 
+        <div className="form-row">
+          <Field
+            label="Sale price (₹)"
+            optional
+            htmlFor="prod-discount"
+            error={err("discountPrice")}
+            hint={
+              err("discountPrice")
+                ? undefined
+                : "Must be lower than the regular price. Leave empty for no sale."
+            }
+          >
+            <input
+              id="prod-discount"
+              type="number"
+              min="0"
+              value={discountPrice}
+              onChange={(e) => {
+                setDiscountPrice(e.target.value);
+                revalidate("discountPrice", e.target.value);
+              }}
+              onBlur={() => handleBlur("discountPrice", discountPrice)}
+              placeholder="999"
+              className={`form-input ${invalid("discountPrice")}`}
+            />
+          </Field>
+
+          <Field label="Brand" optional htmlFor="prod-brand">
+            <input
+              id="prod-brand"
+              type="text"
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              placeholder="e.g. Urban Gear"
+              className="form-input"
+            />
+          </Field>
+        </div>
+
         <Field
           label="Visibility"
           htmlFor="prod-status"
-          hint="Hidden products stay in the catalog but disappear from the storefront."
+          hint="Hidden products stay in your catalog but disappear from the storefront. This is separate from stock — a product with 0 stock shows an Out of stock badge instead."
         >
           <select
             id="prod-status"
-            value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            value={isHidden ? "hidden" : "live"}
+            onChange={(e) => setIsHidden(e.target.value === "hidden")}
             className="form-select"
           >
-            <option value="In Stock">Live on storefront</option>
-            <option value="Out of Stock">Hidden</option>
+            <option value="live">Live on storefront</option>
+            <option value="hidden">Hidden</option>
           </select>
         </Field>
 
@@ -596,7 +738,7 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
           label="Color variants"
           optional
           error={err("variants")}
-          hint="Jaise Black / Brown — har variant ki apni images. Price & stock product-level par hi rehte hain."
+          hint="e.g. Black, Brown — each variant can have its own images. Price and stock are managed at the product level."
         >
           {variants.length > 0 && (
             <div className="space-y-3">

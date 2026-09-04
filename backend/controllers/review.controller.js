@@ -11,7 +11,11 @@ const updateProductRating = async (productId) => {
     // Aggregation pipeline to calculate average rating and count
     const stats = await Review.aggregate([
       {
-        $match: { product: new mongoose.Types.ObjectId(productId) },
+        $match: {
+          product: new mongoose.Types.ObjectId(productId),
+          // sirf approved reviews rating me count honge (missing = legacy approved)
+          status: { $in: ["Approved", null] },
+        },
       },
       {
         $group: {
@@ -85,7 +89,8 @@ export const createReview = async (req, res) => {
     await updateProductRating(product);
 
     return res.status(201).json({
-      message: "Review added successfully",
+      message:
+        "Review submitted successfully — it will appear once approved",
       review,
     });
   } catch (error) {
@@ -154,6 +159,46 @@ export const deleteReviewAdmin = async (req, res) => {
 };
 
 /* =========================================================
+   ADMIN: SET REVIEW STATUS (Approve / Hide / re-Pending)
+   Ye real moderation hai — sirf delete nahi.
+========================================================= */
+export const adminSetReviewStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid Review ID" });
+    }
+
+    if (!["Pending", "Approved", "Hidden"].includes(status)) {
+      return res.status(400).json({
+        message: "Status must be Pending, Approved or Hidden",
+      });
+    }
+
+    const review = await Review.findById(id);
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
+    }
+
+    review.status = status;
+    await review.save();
+
+    // Approved/Hidden hone par product rating dobara calculate hogi
+    await updateProductRating(review.product);
+
+    return res.status(200).json({
+      message: `Review status updated to ${status}`,
+      review,
+    });
+  } catch (error) {
+    console.error("Admin Set Review Status Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
    2. GET ALL REVIEWS FOR A PRODUCT (Public Route)
 ========================================================= */
 export const getProductReviews = async (req, res) => {
@@ -164,7 +209,11 @@ export const getProductReviews = async (req, res) => {
       return res.status(400).json({ message: "Invalid Product ID" });
     }
 
-    const reviews = await Review.find({ product: productId })
+    const reviews = await Review.find({
+      product: productId,
+      // moderation — approved hi public hain (missing = legacy approved)
+      status: { $in: ["Approved", null] },
+    })
       .populate("user", "name avatar") // User ka naam aur photo bhejein
       .sort({ createdAt: -1 });
 
@@ -216,6 +265,8 @@ export const updateReview = async (req, res) => {
     // FIX: undefined check use karna chahiye, falsy check nahi — warna valid values skip ho sakti hain
     if (result.data.rating !== undefined) review.rating = result.data.rating;
     if (result.data.comment !== undefined) review.comment = result.data.comment;
+    // Edited review dobara moderation queue me — content change hua hai
+    review.status = "Pending";
 
     await review.save();
 

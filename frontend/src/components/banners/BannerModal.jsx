@@ -150,6 +150,13 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
           required
           htmlFor="banner-title"
           error={err("title")}
+          hint={
+            err("title")
+              ? undefined
+              : title.trim()
+                ? `${title.length} / 100 characters`
+                : "Headline shown on the banner in the storefront hero."
+          }
         >
           <input
             id="banner-title"
@@ -165,7 +172,16 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
           />
         </Field>
 
-        <Field label="Subtitle" optional htmlFor="banner-subtitle">
+        <Field
+          label="Subtitle"
+          optional
+          htmlFor="banner-subtitle"
+          hint={
+            subtitle.trim()
+              ? `${subtitle.length} / 200 characters`
+              : "Short supporting line shown under the title."
+          }
+        >
           <input
             id="banner-subtitle"
             type="text"
@@ -197,7 +213,7 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
           <Field
             label="Show on page"
             htmlFor="banner-page"
-            hint="Kis storefront page par ye banner dikhe."
+            hint="The storefront page where this banner appears."
           >
             <select
               id="banner-page"
@@ -214,7 +230,7 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
           <Field
             label="Position"
             htmlFor="banner-position"
-            hint="Page par kahan dikhe."
+            hint="Where on that page the banner is placed."
           >
             <select
               id="banner-position"

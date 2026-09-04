@@ -7,6 +7,7 @@ import {
   setSelectedCategory,
 } from "../features/products/productsSlice";
 import { fetchCategories } from "../features/categories/categoriesSlice";
+import { fetchCollections } from "../features/collections/collectionsSlice";
 import { exportAllProductsToExcel } from "../utils/exportProductToExcel";
 import { downloadProductsSampleCsv } from "../utils/csvTemplates";
 import { notifyInfo } from "../lib/toast";
@@ -38,6 +39,7 @@ const ProductsPage = () => {
   const { categories, loading: catLoading } = useSelector(
     (state) => state.categories,
   );
+  const { collections } = useSelector((state) => state.collections);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
@@ -57,7 +59,8 @@ const ProductsPage = () => {
 
   useEffect(() => {
     if (categories.length === 0) dispatch(fetchCategories());
-  }, [dispatch, categories.length]);
+    if (collections.length === 0) dispatch(fetchCollections());
+  }, [dispatch, categories.length, collections.length]);
 
   useEffect(() => {
     if (selectedCategoryId) {
@@ -279,8 +282,7 @@ const ProductsPage = () => {
             Required columns: <b>name, description, price, stock, images</b>{" "}
             (images = comma-separated URLs). Optional: brand, subCategory,
             discountPrice, sku (khali = auto-generate), category_name
-            (dropdown override), isActive, isFeatured/isBestSeller/
-            isNewArrival. Slug auto-generate hota hai.
+            (dropdown override), isActive. Slug auto-generate hota hai.
           </>
         }
         onDownloadSample={downloadProductsSampleCsv}

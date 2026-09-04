@@ -25,6 +25,7 @@ export const NAV_GROUPS = [
     title: "Catalog",
     links: [
       { path: "/categories", label: "Categories", Icon: GridIcon },
+      { path: "/collections", label: "Collections", Icon: TagIcon },
       { path: "/products", label: "Products", Icon: BagIcon },
       { path: "/banners", label: "Banners", Icon: ImageIcon },
     ],

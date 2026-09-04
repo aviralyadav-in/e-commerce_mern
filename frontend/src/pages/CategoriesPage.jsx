@@ -93,7 +93,7 @@ const CategoriesPage = () => {
     <div className="page-shell">
       <PageHeader
         title="Categories"
-        subtitle="Group your catalog so shoppers can browse by collection."
+        subtitle="Group your catalog so shoppers can browse by category."
         meta={
           <>
             <span className="meta-chip">
@@ -159,7 +159,7 @@ const CategoriesPage = () => {
         <div className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-(--radius) bg-amber-50 border border-amber-200">
           <span className="spinner spinner-sm" />
           <p className="text-[12.5px] text-amber-800">
-            Deleting the category and its products — this can take a moment.
+            Hiding the category — its products are not affected.
           </p>
         </div>
       )}

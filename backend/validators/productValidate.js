@@ -34,12 +34,32 @@ export const productValidationSchema = z.object({
 
   brand: z.string().trim().optional().default(""),
 
+  // Sub-category multi-select - input kisi bhi shape me aa sakta hai:
+  // JSON string '["Men","Women"]', plain "Men", comma-separated "Men,Women"
+  // ya direct array. Sab normalize karke array banao.
   subCategory: z
-    .enum(["Men", "Women", "Unisex"], {
-      error: "Sub-category must be Men, Women, or Unisex",
-    })
+    .preprocess((val) => {
+      if (val === undefined) return val; // .optional()/.default() handle karenge
+      if (val === null || val === "") return ["Men"]; // khali value - default
+      if (Array.isArray(val)) return val;
+      if (typeof val === "string") {
+        const trimmed = val.trim();
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          // JSON nahi hai - plain / comma-separated string
+        }
+        return trimmed.split(",").map((v) => v.trim()).filter(Boolean);
+      }
+      return val;
+    }, z.array(
+      z.enum(["Men", "Women"], {
+        error: "Sub-category must be Men or Women",
+      }),
+    ).min(1, "Select at least one sub-category (Men or Women)"))
     .optional()
-    .default("Unisex"),
+    .default(["Men"]),
 
   // 🔥 IMAGE SCHEMA UPDATED HERE 🔥
   images: z.object({
@@ -95,13 +115,16 @@ export const productValidationSchema = z.object({
 
   numOfReviews: z.number().optional().default(0),
 
-  // Collection flags (FormData se "true"/"false" string aata hai,
-  // controller use boolean me parse karta hai)
-  isFeatured: z.boolean().optional().default(false),
-
-  isBestSeller: z.boolean().optional().default(false),
-
-  isNewArrival: z.boolean().optional().default(false),
+  // 🆕 Collections — Collections section (categories) ke ObjectId strings.
+  // FormData me JSON string array aata hai; controller parse karta hai.
+  collections: z
+    .array(
+      z
+        .string({ error: "Collection ID must be a string" })
+        .regex(/^[0-9a-fA-F]{24}$/, "Invalid Collection ID format"),
+    )
+    .optional()
+    .default([]),
 
   // 🆕 Color variants — optional array; har variant me name required,
   // images optional (admin product images bhi use kar sakta hai).

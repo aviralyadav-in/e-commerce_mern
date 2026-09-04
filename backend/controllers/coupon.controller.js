@@ -34,6 +34,8 @@ export const createCoupon = async (req, res) => {
       discountType,
       discountValue,
       minOrderValue,
+      usageLimit,
+      perUserLimit,
       expiryDate,
       isActive,
     } = result.data;
@@ -56,6 +58,8 @@ export const createCoupon = async (req, res) => {
       discountType,
       discountValue,
       minOrderValue,
+      usageLimit,
+      perUserLimit,
       expiryDate,
       isActive,
     });
@@ -234,6 +238,26 @@ export const applyCoupon = async (req, res) => {
     // 2. Check Expiry Date
     if (new Date() > new Date(coupon.expiryDate)) {
       return res.status(400).json({ message: "This coupon has expired" });
+    }
+
+    // 2b. Global usage limit — usedCount >= usageLimit ho toh block
+    if (coupon.usageLimit != null && (coupon.usedCount || 0) >= coupon.usageLimit) {
+      return res
+        .status(400)
+        .json({ message: "This coupon has reached its usage limit" });
+    }
+
+    // 2c. Per-user limit — is user pehle kitni baar use kar chuka
+    if (coupon.perUserLimit != null && req.user) {
+      const entry = (coupon.usedBy || []).find(
+        (u) => String(u.user) === String(req.user._id),
+      );
+      if (entry && (entry.count || 0) >= coupon.perUserLimit) {
+        return res.status(400).json({
+          message:
+            "You have already used this coupon the maximum number of times",
+        });
+      }
     }
 
     // 3. Check Minimum Order Value

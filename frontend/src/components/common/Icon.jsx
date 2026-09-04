@@ -118,6 +118,12 @@ export const GridIcon = make(
     <rect x="13" y="13" width="7" height="7" rx="1.6" />
   </>,
 );
+export const ListIcon = make(
+  <>
+    <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+  </>,
+  2,
+);
 export const ImageIcon = make(
   <>
     <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />

@@ -39,6 +39,11 @@ export const createCategory = async (req, res) => {
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
+    // 🆕 parentId — FormData me "" (top-level) ya ObjectId string aata hai
+    if (req.body.parentId === "" || req.body.parentId === "null") {
+      req.body.parentId = null;
+    }
+
     // FormData me subCategories JSON string / single value aa sakta hai
     if (typeof req.body.subCategories === "string") {
       try {
@@ -67,7 +72,8 @@ export const createCategory = async (req, res) => {
     }
 
     // Fix: parentCategory hata diya gaya hai kyunki schema me nahi hai
-    const { name, slug, description, isActive, subCategories } = result.data;
+    const { name, slug, description, isActive, subCategories, parentId } =
+      result.data;
 
     /* -------------------------
        Duplicate Check (Name OR Slug)
@@ -91,6 +97,18 @@ export const createCategory = async (req, res) => {
     }
 
     /* -------------------------
+       🆕 Parent category validation — exist karti ho
+    ------------------------- */
+    if (parentId) {
+      const parentExists = await Category.findById(parentId).lean();
+      if (!parentExists) {
+        if (req.file)
+          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+        return res.status(400).json({ message: "Parent category not found" });
+      }
+    }
+
+    /* -------------------------
        Handle Image & Create
     ------------------------- */
     const imageUrl = req.file ? `/uploads/categories/${req.file.filename}` : "";
@@ -100,6 +118,7 @@ export const createCategory = async (req, res) => {
       slug,
       description: description || "",
       isActive: isActive !== undefined ? isActive : true,
+      parentId: parentId || null,
       subCategories: subCategories?.length ? subCategories : ["Men", "Women"],
       image: imageUrl,
     });
@@ -186,6 +205,11 @@ export const updateCategory = async (req, res) => {
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
+    // 🆕 parentId — FormData me "" (top-level) ya ObjectId string aata hai
+    if (req.body.parentId === "" || req.body.parentId === "null") {
+      req.body.parentId = null;
+    }
+
     if (typeof req.body.subCategories === "string") {
       try {
         const parsed = JSON.parse(req.body.subCategories);
@@ -240,6 +264,26 @@ export const updateCategory = async (req, res) => {
     }
 
     /* -------------------------
+       🆕 Parent category validation — khud ko parent na banao,
+       parent exist karti ho
+    ------------------------- */
+    if (updateData.parentId) {
+      if (String(updateData.parentId) === String(id)) {
+        if (req.file)
+          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+        return res
+          .status(400)
+          .json({ message: "Category cannot be its own parent" });
+      }
+      const parentExists = await Category.findById(updateData.parentId).lean();
+      if (!parentExists) {
+        if (req.file)
+          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+        return res.status(400).json({ message: "Parent category not found" });
+      }
+    }
+
+    /* -------------------------
        Handle Image Replacement
     ------------------------- */
     if (req.file) {
@@ -263,6 +307,57 @@ export const updateCategory = async (req, res) => {
     console.error("Update Category Error:", error);
     if (req.file)
       await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+/* =========================================================
+   GET ALL CATEGORIES (ADMIN — inactive bhi, restore ke liye)
+========================================================= */
+export const getAdminCategories = async (req, res) => {
+  try {
+    const categories = await Category.find()
+      .populate("parentId", "name")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json({
+      message: "All categories fetched successfully",
+      count: categories.length,
+      categories,
+    });
+  } catch (error) {
+    console.error("Get Admin Categories Error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+/* =========================================================
+   RESTORE CATEGORY (undo soft delete)
+========================================================= */
+export const restoreCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid category ID" });
+    }
+
+    const category = await Category.findByIdAndUpdate(
+      id,
+      { isActive: true },
+      { new: true },
+    );
+
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    return res.status(200).json({
+      message: "Category restored successfully",
+      category,
+    });
+  } catch (error) {
+    console.error("Restore Category Error:", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -298,9 +393,13 @@ export const deleteCategory = async (req, res) => {
       });
     }
 
+    // 🆕 Parent delete hone par children top-level ho jaate hain
+    await Category.updateMany({ parentId: id }, { $set: { parentId: null } });
     await Category.findByIdAndUpdate(id, { isActive: false });
 
-    return res.status(200).json({ message: "Category deleted successfully" });
+    return res.status(200).json({
+      message: "Category deactivated successfully (soft deleted)",
+    });
   } catch (error) {
     console.error("Delete Category Error:", error);
     return res.status(500).json({ message: "Internal Server Error" });

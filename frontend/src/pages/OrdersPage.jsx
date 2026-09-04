@@ -70,11 +70,16 @@ const OrdersPage = () => {
 
   const openCount = statusCounts.Pending + statusCounts.Processing;
 
-  /** Cancelled orders never became money, so they stay out of revenue. */
+  /** Revenue = confirmed payments only — Pending/Failed/Refunded aur
+   *  Cancelled orders revenue nahi hote (fake gateway revenue nahi). */
   const revenue = useMemo(
     () =>
       orders
-        .filter((o) => o.orderStatus !== "Cancelled")
+        .filter(
+          (o) =>
+            o.orderStatus !== "Cancelled" &&
+            o.paymentStatus === "Completed",
+        )
         .reduce((sum, o) => sum + (o.totalAmount || 0), 0),
     [orders],
   );

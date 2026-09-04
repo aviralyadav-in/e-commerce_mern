@@ -28,6 +28,13 @@ const reviewSchema = new mongoose.Schema(
       trim: true,
       maxlength: [500, "Comment cannot exceed 500 characters"],
     },
+    // Moderation — sirf Approved reviews storefront par dikhte hain.
+    // Admin Approve / Hide / re-Pending kar sakta hai.
+    status: {
+      type: String,
+      enum: ["Pending", "Approved", "Hidden"],
+      default: "Pending",
+    },
   },
   {
     timestamps: true,

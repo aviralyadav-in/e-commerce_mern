@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { useDispatch } from "react-redux";
-import { deleteReview } from "../../features/reviews/reviewsSlice";
+import {
+  deleteReview,
+  updateReviewStatus,
+} from "../../features/reviews/reviewsSlice";
 import useTableControls from "../../hooks/useTableControls";
 import ConfirmDialog from "../common/ConfirmDialog";
 import EmptyState from "../common/EmptyState";
@@ -8,7 +11,13 @@ import Pagination from "../common/Pagination";
 import SortableTh from "../common/SortableTh";
 import Thumb from "../common/Thumb";
 import { formatDate, initials } from "../../utils/format";
-import { StarIcon, StarFilledIcon, TrashIcon } from "../common/Icon";
+import {
+  CheckIcon,
+  EyeOffIcon,
+  StarIcon,
+  StarFilledIcon,
+  TrashIcon,
+} from "../common/Icon";
 
 export const StarRow = ({ rating = 0, size = "w-3.5 h-3.5" }) => (
   <div className="flex items-center gap-0.5" aria-label={`${rating} out of 5`}>
@@ -71,6 +80,7 @@ const ReviewTable = ({ reviews }) => {
                   onSort={table.toggleSort}
                 />
                 <th scope="col">Comment</th>
+                <th scope="col">Status</th>
                 <SortableTh
                   label="Date"
                   sortKey="date"
@@ -131,11 +141,59 @@ const ReviewTable = ({ reviews }) => {
                           "{review.comment || review.review || "No written review"}"
                         </p>
                       </td>
+                      <td>
+                        <span
+                          className={`badge ${
+                            review.status === "Approved"
+                              ? "badge-success"
+                              : review.status === "Pending"
+                                ? "badge-warning"
+                                : "badge-neutral"
+                          }`}
+                        >
+                          <span className="badge-dot" />
+                          {review.status || "Pending"}
+                        </span>
+                      </td>
                       <td className="whitespace-nowrap text-slate-500 text-[12px]">
                         {formatDate(review.createdAt)}
                       </td>
                       <td className="text-right">
-                        <div className="flex justify-end">
+                        <div className="flex justify-end gap-1.5">
+                          {review.status !== "Approved" && (
+                            <button
+                              onClick={() =>
+                                dispatch(
+                                  updateReviewStatus({
+                                    id: review._id,
+                                    status: "Approved",
+                                  }),
+                                )
+                              }
+                              className="icon-btn icon-btn-view"
+                              title="Approve review"
+                              aria-label="Approve review"
+                            >
+                              <CheckIcon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {review.status !== "Hidden" && (
+                            <button
+                              onClick={() =>
+                                dispatch(
+                                  updateReviewStatus({
+                                    id: review._id,
+                                    status: "Hidden",
+                                  }),
+                                )
+                              }
+                              className="icon-btn icon-btn-edit"
+                              title="Hide review"
+                              aria-label="Hide review"
+                            >
+                              <EyeOffIcon className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => setDeleteTarget(review)}
                             className="icon-btn icon-btn-delete"
@@ -151,7 +209,7 @@ const ReviewTable = ({ reviews }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan="6" className="empty-cell">
+                  <td colSpan="7" className="empty-cell">
                     <EmptyState
                       icon={<StarIcon className="w-5 h-5" />}
                       title="No reviews yet"

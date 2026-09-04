@@ -31,10 +31,11 @@ export const fetchOrderById = createAsyncThunk(
 
 export const updateOrderStatus = createAsyncThunk(
   "orders/updateStatus",
-  async ({ id, orderStatus }, { rejectWithValue }) => {
+  async ({ id, orderStatus, paymentStatus }, { rejectWithValue }) => {
     try {
       const response = await API.put(`/orders/admin/${id}/status`, {
         orderStatus,
+        paymentStatus,
       });
       return response.data.order;
     } catch (error) {
@@ -45,19 +46,8 @@ export const updateOrderStatus = createAsyncThunk(
   },
 );
 
-export const deleteOrder = createAsyncThunk(
-  "orders/delete",
-  async (id, { rejectWithValue }) => {
-    try {
-      await API.delete(`/orders/admin/${id}`);
-      return id;
-    } catch (error) {
-      return rejectWithValue(
-        error.response?.data?.message || "Error deleting order",
-      );
-    }
-  },
-);
+// NOTE: Order hard-delete hata diya — admin order ko Cancelled karta hai
+// (updateOrderStatus), jisse stock restore hota hai aur record safe rehta hai.
 
 const ordersSlice = createSlice({
   name: "orders",
@@ -111,17 +101,6 @@ const ordersSlice = createSlice({
         }
       })
       .addCase(updateOrderStatus.rejected, (state, action) => {
-        state.error = action.payload;
-      })
-      .addCase(deleteOrder.fulfilled, (state, action) => {
-        state.orders = state.orders.filter(
-          (order) => order._id !== action.payload,
-        );
-        if (state.selectedOrder?._id === action.payload) {
-          state.selectedOrder = null;
-        }
-      })
-      .addCase(deleteOrder.rejected, (state, action) => {
         state.error = action.payload;
       });
   },
