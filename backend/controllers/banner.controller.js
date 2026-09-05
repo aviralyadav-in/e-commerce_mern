@@ -69,11 +69,18 @@ export const createBanner = async (req, res) => {
 export const getBanners = async (req, res) => {
   try {
     // 🆕 Optional page filter — ?page=shop ya ?page=wishlist
-    const { page } = req.query;
+    // 🔒 FIX (Public API): Default me sirf ACTIVE banners dikhate hain —
+    // storefront hidden banner nahi dekh sakta.
+    // Admin panel ?all=true bhejta hai taaki inactive banners bhi manage ho sakein.
+    const { page, all } = req.query;
     const filter =
       page && ["home", "shop", "wishlist"].includes(String(page))
         ? { page: String(page) }
         : {};
+
+    if (String(all) !== "true") {
+      filter.isActive = true;
+    }
 
     // Fix: Banners ko pehle 'sortOrder' se (1, 2, 3), uske baad naye banners (createdAt) ke hisab se sort kiya hai
     const banners = await Banner.find(filter).sort({ sortOrder: 1, createdAt: -1 });

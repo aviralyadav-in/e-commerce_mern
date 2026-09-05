@@ -2,6 +2,8 @@ import { Cart } from "../models/cart.model.js";
 import { Product } from "../models/product.model.js"; // Product model ka path adjust kar lena
 import mongoose from "mongoose";
 import { z } from "zod";
+// 🆕 Selling price helper — sale ho toh sale price, warna MRP
+import { unitPrice } from "../utils/commerce.js";
 
 // Zod validation incoming request (req.body) ke liye
 // Client sirf product ID aur quantity bhejega, price backend decide karega
@@ -114,15 +116,15 @@ export const addToCart = async (req, res) => {
       // Line pehle se hai -> sirf quantity update karein
       cart.items[itemIndex].quantity += quantity;
 
-      // Price bhi update kar do, in case admin ne price change kar di ho
-      cart.items[itemIndex].price = productExists.price;
+      // Price bhi update kar do, in case admin ne price/sale change kar di ho
+      cart.items[itemIndex].price = unitPrice(productExists);
     } else {
       // Nayi line cart me push karein
       cart.items.push({
         product: productId,
         variantName: variantName || null,
         quantity: quantity,
-        price: productExists.price, // REAL price from DB
+        price: unitPrice(productExists), // Selling price (sale included, warna MRP)
       });
     }
 
@@ -131,7 +133,7 @@ export const addToCart = async (req, res) => {
     await cart.save();
 
     // Populate karke return karein taaki frontend par details dikh sakein
-    await cart.populate("items.product", "name images price");
+    await cart.populate("items.product", "name images price discountPrice");
 
     return res.status(200).json({
       message: "Item added to cart",
@@ -150,9 +152,7 @@ export const getCart = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    let cart = await Cart.findOne({ user: userId })
-      .populate("items.product", "name images price stock")
-      .populate("couponApplied", "code discountType discountValue"); // FIX: Coupon model ke real fields
+    let cart = await Cart.findOne({ user: userId });
 
     if (!cart) {
       // Agar naya user hai aur cart nahi bana, toh empty structure bhej do
@@ -166,6 +166,37 @@ export const getCart = async (req, res) => {
         },
       });
     }
+
+    // 🆕 FIX (Sale price): Legacy carts me MRP snapshot pada ho sakta hai.
+    // Har fetch par price ko DB ke current selling price (unitPrice) se
+    // re-sync karte hain — purani cart lines bhi sale price par aa jaati hain.
+    if (cart.items.length > 0) {
+      const productIds = cart.items.map((item) => item.product);
+      const products = await Product.find(
+        { _id: { $in: productIds } },
+        "price discountPrice",
+      );
+      const priceMap = new Map(
+        products.map((p) => [String(p._id), unitPrice(p)]),
+      );
+
+      let changed = false;
+      for (const item of cart.items) {
+        const current = priceMap.get(String(item.product));
+        if (current !== undefined && item.price !== current) {
+          item.price = current;
+          changed = true;
+        }
+      }
+      if (changed) {
+        calculateCartTotals(cart);
+        await cart.save();
+      }
+    }
+
+    // Populate ab karo (sync ke baad) taaki frontend ko details milein
+    await cart.populate("items.product", "name images price discountPrice stock");
+    await cart.populate("couponApplied", "code discountType discountValue"); // FIX: Coupon model ke real fields
 
     return res.status(200).json({
       message: "Cart fetched successfully",
@@ -228,14 +259,14 @@ export const updateCartItem = async (req, res) => {
       });
     }
 
-    // Absolute quantity set karo aur price sync rakho
+    // Absolute quantity set karo aur price sync rakho (sale price included)
     cart.items[itemIndex].quantity = quantity;
-    cart.items[itemIndex].price = productExists.price;
+    cart.items[itemIndex].price = unitPrice(productExists);
 
     calculateCartTotals(cart);
     await cart.save();
 
-    await cart.populate("items.product", "name images price stock");
+    await cart.populate("items.product", "name images price discountPrice stock");
 
     return res.status(200).json({
       message: "Cart updated successfully",
@@ -282,7 +313,7 @@ export const removeFromCart = async (req, res) => {
     calculateCartTotals(cart);
     await cart.save();
 
-    await cart.populate("items.product", "name images price");
+    await cart.populate("items.product", "name images price discountPrice");
 
     return res.status(200).json({
       message: "Item removed from cart",

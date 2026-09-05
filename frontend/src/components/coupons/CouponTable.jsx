@@ -120,17 +120,6 @@ const CouponTable = ({ coupons, onEdit, onCreate }) => {
                           ? formatCurrency(coupon.minOrderValue)
                           : "No minimum"}
                       </td>
-                      <td className="whitespace-nowrap">
-                        <span
-                          className={`text-[12.5px] ${
-                            expired
-                              ? "text-rose-600 font-semibold"
-                              : "text-slate-600"
-                          }`}
-                        >
-                          {coupon.expiryDate ? formatDate(coupon.expiryDate) : "Never"}
-                        </span>
-                      </td>
                       <td className="text-right whitespace-nowrap">
                         <p className="cell-strong text-slate-800 text-[12.5px] tabular-nums">
                           {coupon.usedCount || 0}
@@ -143,6 +132,17 @@ const CouponTable = ({ coupons, onEdit, onCreate }) => {
                             max {coupon.perUserLimit}/user
                           </span>
                         )}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        <span
+                          className={`text-[12.5px] ${
+                            expired
+                              ? "text-rose-600 font-semibold"
+                              : "text-slate-600"
+                          }`}
+                        >
+                          {coupon.expiryDate ? formatDate(coupon.expiryDate) : "Never"}
+                        </span>
                       </td>
                       <td>
                         <span className={`badge ${badge.className}`}>

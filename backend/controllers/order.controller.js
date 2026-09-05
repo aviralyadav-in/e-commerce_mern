@@ -4,6 +4,8 @@ import { Address } from "../models/address.model.js";
 import { Coupon } from "../models/coupon.model.js";
 import { Cart } from "../models/cart.model.js";
 import { z } from "zod";
+// 🆕 Selling price + coupon refund helpers
+import { unitPrice, decrementCouponUsage } from "../utils/commerce.js";
 
 // MongoDB ObjectId validator
 const objectIdValidation = z
@@ -69,6 +71,8 @@ export const createOrder = async (req, res) => {
     // 2. Fetch Real Prices & Check Stock
     let itemsPrice = 0;
     const finalOrderItems = [];
+    // 🆕 Atomic deduction ke liye product ka naam bhi yaad rakho (error msg)
+    const stockReserve = [];
 
     for (const item of orderItems) {
       const product = await Product.findById(item.product);
@@ -97,15 +101,22 @@ export const createOrder = async (req, res) => {
         }
       }
 
-      // Backend se real price set karna
-      const itemTotalPrice = product.price * item.quantity;
-      itemsPrice += itemTotalPrice;
+      // 🆕 FIX (Sale price): backend se real SELLING price set karna
+      // (sale valid ho toh discountPrice, warna MRP) — customer ko MRP nahi
+      const unit = unitPrice(product);
+      itemsPrice += unit * item.quantity;
 
       finalOrderItems.push({
         product: product._id,
         variantName: item.variantName || null,
         quantity: item.quantity,
-        price: product.price, // Real DB Price
+        price: unit, // Selling price snapshot (sale included)
+      });
+
+      stockReserve.push({
+        product: product._id,
+        name: product.name,
+        quantity: item.quantity,
       });
     }
 
@@ -178,28 +189,58 @@ export const createOrder = async (req, res) => {
 
     const totalAmount = Math.max(0, afterDiscount + shippingPrice);
 
-    // 5. Create Order
-    const order = await Order.create({
-      user: userId,
-      shippingAddress,
-      orderItems: finalOrderItems,
-      itemsPrice,
-      shippingPrice,
-      couponCode: appliedCouponCode,
-      discountAmount,
-      totalAmount,
-      paymentMethod,
-      // No payment gateway hai — Card/UPI bhi Pending rahenge jab tak admin
-      // payment manually confirm na kare (paymentStatus = Completed).
-      // Fake "Completed" revenue se bachne ke liye.
-      paymentStatus: "Pending",
-    });
+    // 5. 🆕 FIX (Oversell race condition): Atomic stock decrement —
+    // order banane se PEHLE. Pehle "check + alag se $inc" hota tha, do
+    // parallel requests dono check pass karke stock negative kar sakte the.
+    // Ab conditional update me hi stock reserve hota hai — guaranteed atomic.
+    const deducted = [];
+    for (const item of stockReserve) {
+      const updated = await Product.findOneAndUpdate(
+        { _id: item.product, stock: { $gte: item.quantity } },
+        { $inc: { stock: -item.quantity } },
+        { new: true },
+      );
 
-    // 6. Deduct Stock from Products
-    for (const item of finalOrderItems) {
-      await Product.findByIdAndUpdate(item.product, {
-        $inc: { stock: -item.quantity },
+      if (!updated) {
+        // Ye item out of stock hai — is order ke pehle deduct hue stock wapas
+        for (const done of deducted) {
+          await Product.findByIdAndUpdate(done.product, {
+            $inc: { stock: done.quantity },
+          });
+        }
+        return res.status(400).json({
+          message: `Out of stock! Requested quantity of ${item.name} is no longer available`,
+        });
+      }
+
+      deducted.push({ product: item.product, quantity: item.quantity });
+    }
+
+    // 6. Create Order — agar creation fail ho toh deducted stock rollback
+    let order;
+    try {
+      order = await Order.create({
+        user: userId,
+        shippingAddress,
+        orderItems: finalOrderItems,
+        itemsPrice,
+        shippingPrice,
+        couponCode: appliedCouponCode,
+        discountAmount,
+        totalAmount,
+        paymentMethod,
+        // No payment gateway hai — Card/UPI bhi Pending rahenge jab tak admin
+        // payment manually confirm na kare (paymentStatus = Completed).
+        // Fake "Completed" revenue se bachne ke liye.
+        paymentStatus: "Pending",
       });
+    } catch (createError) {
+      for (const done of deducted) {
+        await Product.findByIdAndUpdate(done.product, {
+          $inc: { stock: done.quantity },
+        });
+      }
+      throw createError;
     }
 
     // 6b. Coupon usage record karo — usedCount + per-user count badhao
@@ -376,6 +417,23 @@ export const updateOrderStatus = async (req, res) => {
         await Product.findByIdAndUpdate(item.product, {
           $inc: { stock: item.quantity },
         });
+      }
+
+      // 🆕 FIX (Coupon refund): Cancel hone par coupon ka usage count bhi
+      // wapas karo — warna limit hit ho jaati hai aur 11th user block ho jaata.
+      if (order.couponCode) {
+        // Global usedCount ghatao (guard: 0 se neeche nahi jayega)
+        await decrementCouponUsage(order.couponCode);
+
+        // Per-user count ghatao (guard: entry ho aur count > 0)
+        await Coupon.updateOne(
+          {
+            code: order.couponCode,
+            "usedBy.user": order.user,
+            "usedBy.count": { $gt: 0 },
+          },
+          { $inc: { "usedBy.$.count": -1 } },
+        );
       }
     }
 

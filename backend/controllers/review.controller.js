@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { Review } from "../models/review.model.js";
 import { Product } from "../models/product.model.js";
+import { Order } from "../models/order.model.js";
 import { reviewValidationSchema } from "../validators/reviewValidate.js";
 
 /* =========================================================
@@ -77,12 +78,22 @@ export const createReview = async (req, res) => {
         .json({ message: "You have already reviewed this product" });
     }
 
+    // 🆕 FIX (Verified Buyer): Purchase verification — kya is user ne ye
+    // product order kiya hai? (Cancelled orders count nahi hote)
+    // Review block NAHI karte — bas "Verified Buyer" label ka sach store karte hain.
+    const hasPurchased = await Order.exists({
+      user,
+      "orderItems.product": product,
+      orderStatus: { $ne: "Cancelled" },
+    });
+
     // Create Review
     const review = await Review.create({
       user,
       product,
       rating,
       comment,
+      verifiedPurchase: Boolean(hasPurchased),
     });
 
     // Update Product Stats automatically

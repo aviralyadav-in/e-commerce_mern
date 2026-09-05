@@ -2,11 +2,12 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import API from "../../api/axios";
 
 // 1. Fetch All Banners
+// ?all=true — admin ko inactive banners bhi dikhane hain (manage karne ke liye)
 export const fetchBanners = createAsyncThunk(
   "banners/fetchAll",
   async (_, { rejectWithValue }) => {
     try {
-      const response = await API.get("/banners");
+      const response = await API.get("/banners?all=true");
       return response.data.banners || [];
     } catch (error) {
       return rejectWithValue(

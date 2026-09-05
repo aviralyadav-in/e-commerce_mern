@@ -35,6 +35,12 @@ const reviewSchema = new mongoose.Schema(
       enum: ["Pending", "Approved", "Hidden"],
       default: "Pending",
     },
+    // 🆕 Purchase verification — review block nahi hota, bas "Verified Buyer"
+    // label ka sach ai mirror hai. True = reviewer ne ye product order kiya hai.
+    verifiedPurchase: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,
