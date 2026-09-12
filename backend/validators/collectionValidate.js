@@ -1,18 +1,6 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
-const ruleSchema = z.object({
-  field: z.enum(["price", "stock", "createdAt", "subCategory"], {
-    error: "Invalid rule field",
-  }),
-  operator: z.enum(["gt", "gte", "lt", "lte", "eq", "withinDays"], {
-    error: "Invalid rule operator",
-  }),
-  value: z.union([z.string(), z.number()], {
-    error: "Rule value is required",
-  }),
-});
-
-export const collectionValidationSchema = z.object({
+export const baseCollectionSchema = z.object({
   name: z
     .string({ error: "Collection name is required" })
     .trim()
@@ -29,28 +17,63 @@ export const collectionValidationSchema = z.object({
     .string()
     .trim()
     .max(500, "Description cannot exceed 500 characters")
+    .optional(),
+
+  image: z.string().optional(),
+
+  isActive: z.boolean().optional(),
+
+  // 🆕 Home page "Featured Pieces" curation
+  showOnHomePage: z
+    .boolean({ error: "showOnHomePage must be a boolean" })
+    .optional(),
+
+  // 🆕 Dynamic shop badge — product cards par collection naam ka badge
+  showAsBadge: z
+    .boolean({ error: "showAsBadge must be a boolean" })
+    .optional(),
+});
+
+export const collectionValidationSchema = baseCollectionSchema.extend({
+  description: z
+    .string()
+    .trim()
+    .max(500, "Description cannot exceed 500 characters")
     .optional()
     .default(""),
 
   image: z.string().optional().default(""),
 
-  // manual = products khud link karo, automated = rules se auto-membership
-  type: z.enum(["manual", "automated"]).optional().default("manual"),
-
-  // sirf automated collections ke liye
-  rules: z.array(ruleSchema).optional().default([]),
-
   isActive: z.boolean().optional().default(true),
 
-  // 🆕 Home page "Featured Pieces" curation
   showOnHomePage: z
     .boolean({ error: "showOnHomePage must be a boolean" })
     .optional()
     .default(false),
 
-  // 🆕 Dynamic shop badge — product cards par collection naam ka badge
   showAsBadge: z
     .boolean({ error: "showAsBadge must be a boolean" })
     .optional()
     .default(false),
+});
+
+export const updateCollectionSchema = baseCollectionSchema.partial();
+
+/* =========================================================
+   🆕 BULK ADD PRODUCTS — products table bulk action
+   { collectionId, productIds[] } → products.collections array
+========================================================= */
+export const bulkAddProductsSchema = z.object({
+  collectionId: z
+    .string({ error: "Collection ID is required" })
+    .regex(/^[0-9a-fA-F]{24}$/, "Invalid collection ID"),
+
+  productIds: z
+    .array(
+      z
+        .string({ error: "Product ID must be a string" })
+        .regex(/^[0-9a-fA-F]{24}$/, "Invalid product ID"),
+      { error: "productIds must be an array" },
+    )
+    .min(1, "Select at least one product"),
 });

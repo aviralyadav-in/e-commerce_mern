@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   addCollection,
@@ -13,44 +13,7 @@ import {
   CheckIcon,
   GridIcon,
   ImageIcon,
-  PlusIcon,
-  XIcon,
 } from "../common/Icon";
-
-const FIELD_OPTIONS = [
-  { value: "price", label: "Price (₹)" },
-  { value: "stock", label: "Stock" },
-  { value: "createdAt", label: "Created date" },
-  { value: "subCategory", label: "Department" },
-];
-
-const OPERATOR_OPTIONS = {
-  price: [
-    { value: "gt", label: "greater than" },
-    { value: "gte", label: "greater or equal" },
-    { value: "lt", label: "less than" },
-    { value: "lte", label: "less or equal" },
-    { value: "eq", label: "equals" },
-  ],
-  stock: [
-    { value: "gt", label: "greater than" },
-    { value: "gte", label: "greater or equal" },
-    { value: "lt", label: "less than" },
-    { value: "lte", label: "less or equal" },
-    { value: "eq", label: "equals" },
-  ],
-  createdAt: [{ value: "withinDays", label: "within last (days)" }],
-  subCategory: [{ value: "eq", label: "is" }],
-};
-
-const VALUE_PLACEHOLDERS = {
-  price: "e.g. 5000",
-  stock: "e.g. 10",
-  createdAt: "e.g. 30",
-  subCategory: "",
-};
-
-const emptyRule = () => ({ field: "price", operator: "gt", value: "" });
 
 const CollectionModal = ({ isOpen, onClose, editData }) => {
   const dispatch = useDispatch();
@@ -59,12 +22,11 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [image, setImage] = useState(null);
-  // 🆕 Manual = products khud link karo, Automated = rules se auto-membership
-  const [type, setType] = useState("manual");
-  const [rules, setRules] = useState([]);
-  // 🆕 Home page curation + dynamic shop badge
+  // Marketing curation features
   const [showOnHomePage, setShowOnHomePage] = useState(false);
   const [showAsBadge, setShowAsBadge] = useState(false);
+  const [isActive, setIsActive] = useState(true);
+
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
@@ -73,30 +35,21 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
       setName(editData.name || "");
       setDescription(editData.description || "");
       setImage(null);
-      setType(editData.type === "automated" ? "automated" : "manual");
-      setRules(
-        (editData.rules || []).map((r) => ({
-          field: r.field || "price",
-          operator: r.operator || "gt",
-          value: r.value ?? "",
-        })),
-      );
       setShowOnHomePage(editData.showOnHomePage === true);
       setShowAsBadge(editData.showAsBadge === true);
+      setIsActive(editData.isActive !== false);
     } else {
       setName("");
       setDescription("");
       setImage(null);
-      setType("manual");
-      setRules([]);
       setShowOnHomePage(false);
       setShowAsBadge(false);
+      setIsActive(true);
     }
     setErrors({});
     setTouched({});
   });
 
-  // Redux error clear karna external-system update hai — effect allowed hai
   useEffect(() => {
     if (isOpen) dispatch(clearCollectionError());
   }, [dispatch, isOpen]);
@@ -105,8 +58,6 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
     const errs = {};
     const n = "name" in fields ? fields.name : name;
     const d = "description" in fields ? fields.description : description;
-    const t = "type" in fields ? fields.type : type;
-    const r = "rules" in fields ? fields.rules : rules;
     const img = "image" in fields ? fields.image : image;
 
     if (!n.trim()) errs.name = "Collection name is required.";
@@ -116,14 +67,6 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
     if (!d.trim()) errs.description = "Description is required.";
     else if (d.trim().length < 5)
       errs.description = "Description must be at least 5 characters.";
-
-    if (t === "automated") {
-      if (!r.length) {
-        errs.rules = "Automated collection needs at least one rule.";
-      } else if (r.some((rule) => String(rule.value ?? "").trim() === "")) {
-        errs.rules = "Every rule needs a value.";
-      }
-    }
 
     if (!editData && !img) errs.image = "Please select a collection image.";
 
@@ -143,49 +86,31 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
         ? name
         : field === "description"
           ? description
-          : field === "type"
-            ? type
-            : field === "rules"
-              ? rules
-              : image;
+          : image;
     const errs = validate({ [field]: value });
     setErrors((prev) => ({ ...prev, [field]: errs[field] }));
   };
 
-  const updateRule = (index, patch) =>
-    setRules((prev) =>
-      prev.map((rule, i) => {
-        if (i !== index) return rule;
-        const next = { ...rule, ...patch };
-        // field badla to operator/value reset
-        if (patch.field && patch.field !== rule.field) {
-          next.operator = (OPERATOR_OPTIONS[patch.field] || [])[0]?.value || "eq";
-          next.value = "";
-        }
-        return next;
-      }),
-    );
-
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  const slug = name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setTouched({ name: true, description: true, image: true, rules: true });
+    setTouched({ name: true, description: true, image: true });
     const errs = validate();
     setErrors(errs);
     if (Object.keys(errs).length > 0) return;
 
     const formData = new FormData();
-    formData.append("name", name);
+    formData.append("name", name.trim());
     formData.append("slug", slug);
-    formData.append("description", description);
-    formData.append("type", type);
-    formData.append(
-      "rules",
-      JSON.stringify(type === "automated" ? rules : []),
-    );
+    formData.append("description", description.trim());
     formData.append("showOnHomePage", showOnHomePage);
     formData.append("showAsBadge", showAsBadge);
+    formData.append("isActive", isActive);
     if (image) formData.append("image", image);
 
     const action = editData
@@ -205,8 +130,8 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
       title={editData ? "Edit collection" : "New collection"}
       subtitle={
         editData
-          ? "Update this marketing collection."
-          : "Curate products into a marketing collection."
+          ? "Update collection settings, homepage placement, or promotional badges."
+          : "Curate a group of products for seasonal promotions, homepage features, and marketing campaigns."
       }
       footer={
         <>
@@ -237,6 +162,7 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
         noValidate
         className="space-y-4"
       >
+        {/* Collection Name */}
         <Field
           label="Collection name"
           required
@@ -245,7 +171,7 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
           hint={
             name.trim()
               ? `Slug: /${slug}`
-              : "This name appears on storefront badges and in the shop filters."
+              : "Used for promotional banners, storefront filters, and product badges."
           }
         >
           <input
@@ -257,11 +183,12 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
               revalidate("name", e.target.value);
             }}
             onBlur={() => handleBlur("name")}
-            placeholder="e.g. Summer Sale"
+            placeholder="e.g. Summer Flash Sale, New Arrivals, Best Sellers"
             className={`form-input ${touched.name && errors.name ? "is-invalid" : ""}`}
           />
         </Field>
 
+        {/* Description */}
         <Field
           label="Description"
           required
@@ -270,7 +197,7 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
           hint={
             description.trim()
               ? `${description.length} / 500 characters`
-              : "A short line shown alongside the collection on the storefront."
+              : "A brief tagline displayed alongside this collection on the storefront."
           }
         >
           <textarea
@@ -282,168 +209,156 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
               revalidate("description", e.target.value);
             }}
             onBlur={() => handleBlur("description")}
-            placeholder="e.g. Light and breathable picks for summer"
+            placeholder="e.g. Light, functional and stylish picks for weekend escapes…"
             className={`form-textarea ${touched.description && errors.description ? "is-invalid" : ""}`}
           />
         </Field>
 
-        {/* 🆕 Type — manual ya automated */}
-        <Field
-          label="Collection type"
-          required
-          hint={
-            type === "automated"
-              ? "Products matching the conditions below join automatically and stay up to date."
-              : "Choose the products for this collection by hand."
-          }
-        >
-          <div className="flex gap-2">
-            {[
-              { value: "manual", label: "Manual" },
-              { value: "automated", label: "Automated" },
-            ].map((opt) => (
-              <button
-                key={opt.value}
-                type="button"
-                aria-pressed={type === opt.value}
-                onClick={() => {
-                  setType(opt.value);
-                  revalidate("type", opt.value);
-                }}
-                onBlur={() => handleBlur("type")}
-                className={`choice-pill ${type === opt.value ? "choice-pill-active" : ""}`}
-              >
-                {type === opt.value && <CheckIcon className="w-3.5 h-3.5" />}
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </Field>
+        {/* ══════════════════════════════════════════════════════════
+            ✨ MARKETING FEATURE CARDS (Visual & Self-Explanatory)
+            ══════════════════════════════════════════════════════════ */}
+        <div className="space-y-2.5 pt-1">
+          <label className="block text-[12.5px] font-bold text-(--ink)">
+            Marketing & Visibility Features
+          </label>
 
-        {/* 🆕 Rules builder — sirf automated collections ke liye */}
-        {type === "automated" && (
-          <Field
-            label="Membership rules"
-            required
-            error={touched.rules ? errors.rules : undefined}
-            hint="Products that match all of these conditions will become members automatically."
+          {/* Feature 1: Home Page Showcase */}
+          <div
+            onClick={() => setShowOnHomePage(!showOnHomePage)}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+              showOnHomePage
+                ? "border-amber-500/80 bg-amber-50/25 dark:bg-amber-950/25 ring-2 ring-amber-500/20"
+                : "border-(--border) bg-(--surface-card) hover:bg-(--surface-sunken)"
+            }`}
           >
-            <div className="space-y-2">
-              {rules.map((rule, index) => (
-                <div
-                  key={index}
-                  className="flex flex-wrap items-center gap-2 rounded-(--radius) border border-(--border) bg-(--surface-sunken) p-2"
-                >
-                  <select
-                    value={rule.field}
-                    onChange={(e) => updateRule(index, { field: e.target.value })}
-                    className="form-select flex-1"
-                    aria-label="Rule field"
-                  >
-                    {FIELD_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={rule.operator}
-                    onChange={(e) =>
-                      updateRule(index, { operator: e.target.value })
-                    }
-                    className="form-select flex-1"
-                    aria-label="Rule operator"
-                  >
-                    {(OPERATOR_OPTIONS[rule.field] || []).map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  {rule.field === "subCategory" ? (
-                    <select
-                      value={rule.value}
-                      onChange={(e) =>
-                        updateRule(index, { value: e.target.value })
-                      }
-                      className="form-select flex-1"
-                      aria-label="Rule value"
-                    >
-                      <option value="">Select…</option>
-                      <option value="Men">Men</option>
-                      <option value="Women">Women</option>
-                    </select>
-                  ) : (
-                    <input
-                      type="number"
-                      value={rule.value}
-                      onChange={(e) =>
-                        updateRule(index, { value: e.target.value })
-                      }
-                      placeholder={VALUE_PLACEHOLDERS[rule.field] || ""}
-                      className="form-input flex-1"
-                      aria-label="Rule value"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setRules((prev) => prev.filter((_, i) => i !== index))
-                    }
-                    className="icon-btn icon-btn-delete"
-                    title="Remove rule"
-                    aria-label={`Remove rule ${index + 1}`}
-                  >
-                    <XIcon className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => setRules((prev) => [...prev, emptyRule()])}
-                className="btn btn-outline btn-sm"
-              >
-                <PlusIcon className="w-3.5 h-3.5" />
-                Add rule
-              </button>
-            </div>
-          </Field>
-        )}
-
-        {/* 🆕 Home page curation */}
-        <Field
-          label="Home page feature"
-          optional
-          hint="Products in this collection will appear in the “Featured Pieces” section of the home page."
-        >
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-(--ink-soft)">
             <input
               type="checkbox"
               checked={showOnHomePage}
-              onChange={(e) => setShowOnHomePage(e.target.checked)}
-              className="h-4 w-4 accent-amber-500"
+              onChange={() => {}} // handled by parent onClick
+              className="mt-1 h-4 w-4 rounded accent-amber-500 cursor-pointer pointer-events-none"
             />
-            Show this collection on the home page
-          </label>
-        </Field>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="font-semibold text-[13px] text-(--ink)">
+                  Feature on Storefront Home Page
+                </span>
+                <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                  Featured Pieces
+                </span>
+              </div>
+              <p className="text-[11.5px] text-(--ink-muted) leading-snug">
+                Products in this collection will appear prominently in the &ldquo;Featured Pieces&rdquo; section on the home page.
+              </p>
+            </div>
+          </div>
 
-        {/* 🆕 Dynamic shop badge */}
-        <Field
-          label="Shop badge"
-          optional
-          hint="The collection name will appear as a badge on member products across the storefront."
-        >
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-(--ink-soft)">
+          {/* Feature 2: Product Badge Overlay */}
+          <div
+            onClick={() => setShowAsBadge(!showAsBadge)}
+            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 select-none ${
+              showAsBadge
+                ? "border-indigo-500/80 bg-indigo-50/25 dark:bg-indigo-950/25 ring-2 ring-indigo-500/20"
+                : "border-(--border) bg-(--surface-card) hover:bg-(--surface-sunken)"
+            }`}
+          >
             <input
               type="checkbox"
               checked={showAsBadge}
-              onChange={(e) => setShowAsBadge(e.target.checked)}
-              className="h-4 w-4 accent-amber-500"
+              onChange={() => {}} // handled by parent onClick
+              className="mt-1 h-4 w-4 rounded accent-indigo-500 cursor-pointer pointer-events-none"
             />
-            Show as badge on product cards
-          </label>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="font-semibold text-[13px] text-(--ink)">
+                  Show Promotional Badge on Product Cards
+                </span>
+                <span className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                  Product Overlay
+                </span>
+              </div>
+              <p className="text-[11.5px] text-(--ink-muted) leading-snug">
+                Displays the collection name as a branded badge on all member product cards across the shop.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════
+            ✨ LIVE STOREFRONT PREVIEW CARD
+            ══════════════════════════════════════════════════════════ */}
+        <div className="rounded-xl border border-(--border) bg-(--surface-sunken)/40 p-3 shadow-2xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-(--ink-faint)">
+              Storefront Preview
+            </span>
+            <div className="flex items-center gap-1.5">
+              {showOnHomePage && (
+                <span className="shrink-0 rounded-full border border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                  Home
+                </span>
+              )}
+              {showAsBadge && (
+                <span className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                  Badge
+                </span>
+              )}
+              {!showOnHomePage && !showAsBadge && (
+                <span className="text-[10.5px] text-(--ink-faint)">Standard Collection</span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[13px] font-bold text-(--ink) truncate">
+                {name.trim() || "New Collection"}
+              </p>
+              <p className="text-[11.5px] text-(--ink-muted) line-clamp-1">
+                {description.trim() || "Collection description will appear here…"}
+              </p>
+            </div>
+            {showAsBadge && (
+              <div className="shrink-0 px-2 py-1 rounded bg-(--brand) text-white font-bold text-[10.5px] shadow-xs uppercase tracking-wide">
+                {name.trim() || "BADGE"}
+              </div>
+            )}
+          </div>
+
+          <div className="text-[11px] font-mono text-(--ink-faint) pt-1 border-t border-(--border)/60 flex items-center gap-1.5">
+            <span>Storefront URL:</span>
+            <span className="bg-(--surface-card) px-1.5 py-0.5 rounded text-(--ink-soft) border border-(--border)/60">
+              /collections/{slug || "collection-slug"}
+            </span>
+          </div>
+        </div>
+
+        {/* Collection Status */}
+        <Field
+          label="Visibility Status"
+          optional
+          hint="Active collections appear on the storefront. Hidden collections are saved as drafts."
+        >
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setIsActive(true)}
+              className={`choice-pill ${isActive ? "choice-pill-active" : ""}`}
+            >
+              {isActive && <CheckIcon className="w-3.5 h-3.5" />}
+              Active (Visible)
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsActive(false)}
+              className={`choice-pill ${!isActive ? "choice-pill-active" : ""}`}
+            >
+              {!isActive && <CheckIcon className="w-3.5 h-3.5" />}
+              Hidden (Draft)
+            </button>
+          </div>
         </Field>
 
+        {/* Collection Image Dropzone */}
         <Field
           label="Collection image"
           required={!editData}
@@ -458,7 +373,7 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
                 className="w-14 h-14"
               />
               <p className="text-[11.5px] text-(--ink-muted)">
-                Current image — upload a new one to replace it.
+                Current image — upload a new image below to replace it.
               </p>
             </div>
           )}
@@ -471,8 +386,9 @@ const CollectionModal = ({ isOpen, onClose, editData }) => {
               type="file"
               accept="image/*"
               onChange={(e) => {
-                setImage(e.target.files[0]);
-                revalidate("image", e.target.files[0]);
+                const file = e.target.files[0];
+                setImage(file);
+                revalidate("image", file);
               }}
               onBlur={() => handleBlur("image")}
               aria-label="Collection image"

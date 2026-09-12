@@ -14,6 +14,9 @@ import CouponsPage from "./pages/CouponsPage";
 import WishlistPage from "./pages/WishlistPage";
 import AdminCartPage from "./pages/AdminCartPage";
 import ReviewsPage from "./pages/ReviewsPage";
+import InventoryPage from "./pages/InventoryPage";
+import InquiriesPage from "./pages/InquiriesPage";
+import SettingsPage from "./pages/SettingsPage";
 
 function App() {
   return (
@@ -34,12 +37,15 @@ function App() {
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="collections" element={<CollectionsPage />} />
         <Route path="products" element={<ProductsPage />} />
+        <Route path="inventory" element={<InventoryPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="banners" element={<BannersPage />} />
         <Route path="coupons" element={<CouponsPage />} />
         <Route path="reviews" element={<ReviewsPage />} />
+        <Route path="inquiries" element={<InquiriesPage />} />
         <Route path="wishlists" element={<WishlistPage />} />
         <Route path="carts" element={<AdminCartPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

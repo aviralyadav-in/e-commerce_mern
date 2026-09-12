@@ -27,6 +27,8 @@ const CategoriesPage = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editData, setEditData] = useState(null);
+  // 🆕 Listing shortcut — "+" se aaya preset parent (form me locked)
+  const [presetParent, setPresetParent] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(null);
 
@@ -38,11 +40,23 @@ const CategoriesPage = () => {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return categories.filter((c) => {
+    const base = categories.filter((c) => {
       if (status === "active" && !c.isActive) return false;
       if (status === "inactive" && c.isActive) return false;
-      if (!q) return true;
-      return (
+      return true;
+    });
+    if (!q) return base;
+
+    // 🆕 Search — matches + unke saare ancestors auto-include (file-explorer
+    // style: parent rows dikhte rehte hain aur auto-expand hote hain)
+    const byId = new Map(categories.map((c) => [String(c._id), c]));
+    const parentOf = (c) => {
+      const pid = c.parentId ? String(c.parentId._id || c.parentId) : null;
+      return pid ? byId.get(pid) : null;
+    };
+    const result = new Map();
+    for (const c of base) {
+      const hit =
         String(c.name || "")
           .toLowerCase()
           .includes(q) ||
@@ -51,24 +65,41 @@ const CategoriesPage = () => {
           .includes(q) ||
         String(c.description || "")
           .toLowerCase()
-          .includes(q)
-      );
-    });
+          .includes(q);
+      if (!hit) continue;
+      result.set(String(c._id), c);
+      let p = parentOf(c);
+      while (p) {
+        result.set(String(p._id), p);
+        p = parentOf(p);
+      }
+    }
+    return [...result.values()];
   }, [categories, search, status]);
 
   const handleOpenAdd = () => {
     setEditData(null);
+    setPresetParent(null);
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (category) => {
     setEditData(category);
+    setPresetParent(null);
+    setIsModalOpen(true);
+  };
+
+  // 🆕 Listing shortcut — "+" icon: New Category form with locked parent
+  const handleAddSub = (parentCategory) => {
+    setEditData(null);
+    setPresetParent(parentCategory);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditData(null);
+    setPresetParent(null);
   };
 
   const handleExportAll = () => {
@@ -156,9 +187,9 @@ const CategoriesPage = () => {
       />
 
       {deleteLoading && (
-        <div className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-(--radius) bg-amber-50 border border-amber-200">
+        <div className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-(--radius) bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
           <span className="spinner spinner-sm" />
-          <p className="text-[12.5px] text-amber-800">
+          <p className="text-[12.5px] text-amber-800 dark:text-amber-300">
             Hiding the category — its products are not affected.
           </p>
         </div>
@@ -171,6 +202,8 @@ const CategoriesPage = () => {
           categories={filtered}
           onEdit={handleOpenEdit}
           onCreate={handleOpenAdd}
+          searchActive={Boolean(search.trim())}
+          onAddSub={handleAddSub}
         />
       )}
 
@@ -178,6 +211,7 @@ const CategoriesPage = () => {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         editData={editData}
+        presetParent={presetParent}
       />
 
       {/* 🆕 CSV bulk import */}
@@ -185,13 +219,12 @@ const CategoriesPage = () => {
         isOpen={isBulkOpen}
         onClose={() => setIsBulkOpen(false)}
         title="Import categories via CSV"
-        subtitle="Ek hi file me multiple categories — har row ek nayi category."
+        subtitle="Upload a CSV file to add or update multiple categories at once."
         uploadHint={
           <>
-            Required column: <b>name</b>. Optional: description,
-            subCategories (&quot;Men,Women&quot;), isActive (true/false).
-            Slug naam se auto-generate hota hai; duplicates skip ho jaate
-            hain.
+            Required column: <b>name</b>. Optional: <b>description</b>,
+            <b>gender</b> (&quot;Men,Women&quot;), <b>isActive</b> (true/false).
+            Slugs are auto-generated from the name. Existing duplicate names will be skipped automatically.
           </>
         }
         onDownloadSample={downloadCategoriesSampleCsv}

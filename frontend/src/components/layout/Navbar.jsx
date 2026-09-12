@@ -9,23 +9,28 @@ import {
   MenuIcon,
   SearchIcon,
   ChevronDownIcon,
-  UserIcon,
   LogoutIcon,
   SunIcon,
   MoonIcon,
+  ExternalLinkIcon,
 } from "../common/Icon";
+import { getStorefrontUrl } from "../../utils/storefrontUrl";
 
 const pageMeta = {
   "/dashboard": { title: "Dashboard", crumb: "Overview" },
   "/users": { title: "Customers", crumb: "Customers" },
   "/categories": { title: "Categories", crumb: "Catalog" },
+  "/collections": { title: "Collections", crumb: "Catalog" },
   "/products": { title: "Products", crumb: "Catalog" },
+  "/inventory": { title: "Inventory", crumb: "Catalog" },
   "/orders": { title: "Orders", crumb: "Sales" },
   "/banners": { title: "Banners", crumb: "Catalog" },
   "/coupons": { title: "Coupons", crumb: "Sales" },
   "/wishlists": { title: "Wishlists", crumb: "Customers" },
   "/carts": { title: "Carts", crumb: "Customers" },
   "/reviews": { title: "Reviews", crumb: "Sales" },
+  "/inquiries": { title: "Inquiries", crumb: "Customers" },
+  "/settings": { title: "Store Settings", crumb: "System" },
 };
 
 const Navbar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
@@ -81,21 +86,15 @@ const Navbar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
         </button>
 
         <nav className="crumb" aria-label="Breadcrumb">
-          <span className="hidden sm:inline px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 font-medium text-[11px] uppercase tracking-wider">
+          <span className="hidden sm:inline px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/70 dark:border-transparent font-medium text-[11px] uppercase tracking-wider">
             {meta.crumb}
           </span>
           <span className="hidden sm:inline text-slate-300 dark:text-slate-700">/</span>
-          <span className="crumb-current text-[13px]">{meta.title}</span>
+          <span className="crumb-current text-[13px] text-slate-900 dark:text-white font-bold">{meta.title}</span>
         </nav>
       </div>
 
       <div className="flex items-center gap-2.5 sm:gap-3">
-        {/* Live Store Status Indicator */}
-        <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 text-[11.5px] font-semibold text-emerald-700 dark:text-emerald-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Store Live</span>
-        </div>
-
         {/* Global Search trigger */}
         <button
           onClick={() => dispatch(setPaletteOpen(true))}
@@ -110,17 +109,30 @@ const Navbar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
           </span>
         </button>
 
+        {/* Visit Live Storefront */}
+        <a
+          href={getStorefrontUrl("/")}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-indigo-200/80 dark:border-indigo-800/60 bg-indigo-50/70 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 hover:border-indigo-300 transition-all text-xs font-semibold shadow-2xs group"
+          title="Open live customer storefront (http://localhost:5173)"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="hidden sm:inline">Live Store</span>
+          <ExternalLinkIcon className="w-3.5 h-3.5 text-indigo-500 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+        </a>
+
         {/* Dark / Light Mode Switcher */}
         <button
           onClick={() => dispatch(toggleTheme())}
-          className="w-9 h-9 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-amber-300 hover:text-indigo-600 dark:hover:text-amber-200 transition-all hover:scale-105 cursor-pointer shadow-xs"
+          className="w-9 h-9 rounded-xl flex items-center justify-center border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-amber-300 hover:text-indigo-600 dark:hover:text-amber-200 hover:border-indigo-200 dark:hover:border-slate-700 transition-all hover:scale-105 cursor-pointer shadow-xs"
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
         >
           {theme === "dark" ? (
             <SunIcon className="w-4.5 h-4.5 text-amber-400" />
           ) : (
-            <MoonIcon className="w-4.5 h-4.5 text-slate-600" />
+            <MoonIcon className="w-4.5 h-4.5 text-slate-700" />
           )}
         </button>
 
@@ -128,7 +140,7 @@ const Navbar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen((o) => !o)}
-            className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+            className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white/70 dark:bg-transparent shadow-2xs"
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
@@ -136,10 +148,9 @@ const Navbar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
               {initials(admin?.name) || "A"}
             </div>
             <div className="hidden md:block text-left leading-tight pr-0.5">
-              <p className="text-[12.5px] font-bold text-slate-800 dark:text-slate-100">
+              <p className="text-[12.5px] font-bold text-slate-900 dark:text-slate-100">
                 {admin?.name || "Admin"}
               </p>
-              <p className="text-[10.5px] text-indigo-600 dark:text-indigo-400 font-semibold">Super Admin</p>
             </div>
             <ChevronDownIcon className="hidden md:block w-3.5 h-3.5 text-slate-400" />
           </button>
@@ -151,35 +162,16 @@ const Navbar = ({ isOpen, setIsOpen, collapsed, onToggleCollapse }) => {
                   {admin?.name || "Admin"}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                  {admin?.email || "admin@bagstore.com"}
+                  {admin?.email || "admin@niyabags.com"}
                 </p>
                 <span className="inline-block mt-1.5 px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold">
                   Authorized Administrator
                 </span>
               </div>
 
-              <button
-                onClick={() => dispatch(toggleTheme())}
-                className="menu-item justify-between"
-                role="menuitem"
-              >
-                <div className="flex items-center gap-2.5">
-                  {theme === "dark" ? (
-                    <SunIcon className="w-4 h-4 text-amber-400" />
-                  ) : (
-                    <MoonIcon className="w-4 h-4 text-indigo-500" />
-                  )}
-                  <span>{theme === "dark" ? "Switch to Light" : "Switch to Dark"}</span>
-                </div>
-                <span className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 capitalize">
-                  {theme}
-                </span>
-              </button>
-
-              <div className="menu-item" role="menuitem">
-                <UserIcon className="w-4 h-4 text-slate-400" />
-                <span>Super Admin Account</span>
-              </div>
+              {/* 🛠️ Dropdown me sirf "Log out" rakha hai — theme switch topbar
+                  ke standalone button me hai, aur "Super Admin Account" option
+                  roles system na hone ki wajah se hataya gaya tha */}
               <button
                 onClick={() => {
                   setMenuOpen(false);

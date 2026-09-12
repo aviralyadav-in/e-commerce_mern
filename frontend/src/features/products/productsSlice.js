@@ -136,6 +136,24 @@ export const bulkCreateProducts = createAsyncThunk(
   },
 );
 
+// 🆕 Quick update stock for Inventory Ledger
+export const quickUpdateStock = createAsyncThunk(
+  "products/quickUpdateStock",
+  async ({ id, stock, delta }, { rejectWithValue }) => {
+    try {
+      const response = await API.patch(`/products/admin/${id}/stock`, {
+        stock,
+        delta,
+      });
+      return response.data.product;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to update stock",
+      );
+    }
+  },
+);
+
 const productsSlice = createSlice({
   name: "products",
   initialState: {
@@ -215,9 +233,12 @@ const productsSlice = createSlice({
       })
       .addCase(deleteProduct.fulfilled, (state, action) => {
         state.loading = false;
-        state.products = state.products.filter(
-          (prod) => prod._id !== action.payload,
+        const index = state.products.findIndex(
+          (prod) => prod._id === action.payload,
         );
+        if (index !== -1) {
+          state.products[index].isActive = false;
+        }
       })
       .addCase(deleteProduct.rejected, (state, action) => {
         state.loading = false;
@@ -234,6 +255,20 @@ const productsSlice = createSlice({
       })
       .addCase(restoreProduct.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(quickUpdateStock.fulfilled, (state, action) => {
+        const index = state.products.findIndex(
+          (prod) => prod._id === action.payload._id,
+        );
+        if (index !== -1) {
+          state.products[index].stock = action.payload.stock;
+        }
+        if (state.product && state.product._id === action.payload._id) {
+          state.product.stock = action.payload.stock;
+        }
+      })
+      .addCase(quickUpdateStock.rejected, (state, action) => {
         state.error = action.payload;
       });
   },

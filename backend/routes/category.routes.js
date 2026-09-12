@@ -3,6 +3,7 @@ import { categoryUpload, csvUpload } from "../middleware/upload.middleware.js";
 
 import {
   bulkCreateCategories,
+  checkSlugAvailability,
   createCategory,
   deleteCategory,
   getAdminCategories,
@@ -10,6 +11,7 @@ import {
   getCategoryById,
   getCategoryProducts,
   restoreCategory,
+  toggleCategoryStatus,
   updateCategory,
 } from "../controllers/category.controller.js";
 
@@ -22,6 +24,12 @@ categoryRouter.get("/", getCategories);
 
 // Admin — inactive (soft-deleted) categories bhi, restore UI ke liye
 categoryRouter.get("/admin/all", adminRoute, getAdminCategories);
+
+// 🆕 Flat tree list (client tree build karta hai) — /admin/all ka alias
+categoryRouter.get("/admin/tree", adminRoute, getAdminCategories);
+
+// 🆕 Live slug availability check (modal me real-time feedback)
+categoryRouter.get("/admin/check-slug", adminRoute, checkSlugAvailability);
 categoryRouter.get("/:id", getCategoryById);
 categoryRouter.get("/:id/products", getCategoryProducts);
 
@@ -48,6 +56,13 @@ categoryRouter.put(
 );
 
 categoryRouter.patch("/admin/:id/restore", adminRoute, restoreCategory);
+
+// 🆕 Status toggle — active ⇄ inactive
+categoryRouter.patch(
+  "/admin/:id/toggle-status",
+  adminRoute,
+  toggleCategoryStatus,
+);
 
 categoryRouter.delete("/admin/:id", adminRoute, deleteCategory);
 

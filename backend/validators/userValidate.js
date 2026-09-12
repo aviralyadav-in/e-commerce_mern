@@ -35,8 +35,9 @@ export const userValidationSchema = z.object({
       message: "Please enter a valid Indian phone number",
     }),
 
-  avatar: z.string().optional().default(""),
-
+  // 🛠️ avatar body se accept nahi hota — signup/admin create me arbitrary
+  // string (e.g. kisi product image ka URL) set hokar "remove photo" par
+  // wo asset delete na ho. Avatar sirf multer upload (req.file) se set hota hai.
   gender: z
     .enum(["male", "female"], {
       error: "Invalid gender value",
@@ -128,8 +129,8 @@ export const adminUpdateUserSchema = z.object({
     })
     .optional(),
 
-  avatar: z.string().optional(),
-
+  // 🛠️ avatar field nahi — admin sirf dedicated PUT /admin/:id/avatar
+  // (multer upload) se hi avatar set kar sakta hai
   gender: z.enum(["male", "female"]).optional(),
 
   dateOfBirth: z

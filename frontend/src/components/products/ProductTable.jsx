@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   deleteProduct,
@@ -20,14 +20,26 @@ import {
   RefreshIcon,
   StarFilledIcon,
   TrashIcon,
+  ExternalLinkIcon,
 } from "../common/Icon";
+import { getStorefrontUrl } from "../../utils/storefrontUrl";
 
 /** Below this many units we nudge the admin to restock. */
 const LOW_STOCK = 5;
 
-const ProductTable = ({ products, onEdit, onCreate }) => {
+const ProductTable = ({
+  products,
+  onEdit,
+  onCreate,
+  selectedIds = new Set(),
+  onToggleSelect,
+  onToggleSelectAll,
+}) => {
   const dispatch = useDispatch();
   const { categories } = useSelector((state) => state.categories);
+  const { collections: allCollections } = useSelector(
+    (state) => state.collections,
+  );
   const [deleteTarget, setDeleteTarget] = useState(null);
 
   const getCategoryName = (id) => {
@@ -37,11 +49,30 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
     return cat ? cat.name : "Unknown";
   };
 
+  const getCollectionNames = (prod) => {
+    const arr = Array.isArray(prod.collections) ? prod.collections : [];
+    const names = arr
+      .map((c) => {
+        if (typeof c === "object" && c?.name) return c.name;
+        const id = typeof c === "object" ? c?._id : c;
+        const col = (allCollections || []).find(
+          (x) => String(x._id) === String(id),
+        );
+        return col ? col.name : null;
+      })
+      .filter(Boolean);
+    return [...new Set(names)];
+  };
+
   const table = useTableControls(products, {
     accessors: {
       name: (p) => p.name || "",
       category: (p) => getCategoryName(p.categoryId),
-      sub: (p) => p.subCategory || "",
+      sub: (p) => {
+        const g = p.gender ?? p.subCategory;
+        return Array.isArray(g) ? g.join(", ") : g || "";
+      },
+      collections: (p) => getCollectionNames(p).join(", "),
       price: (p) => Number(p.discountPrice || p.price) || 0,
       stock: (p) => Number(p.stock) || 0,
       rating: (p) => Number(p.averageRating) || 0,
@@ -49,6 +80,21 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
     initialSort: { key: "name", dir: "asc" },
     pageSize: 10,
   });
+
+  const selectAllRef = useRef(null);
+  const pageProducts = table.rows;
+  const allSelected =
+    pageProducts.length > 0 &&
+    pageProducts.every((p) => selectedIds.has(String(p._id)));
+  const someSelected = pageProducts.some((p) =>
+    selectedIds.has(String(p._id)),
+  );
+
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someSelected && !allSelected;
+    }
+  }, [someSelected, allSelected]);
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
@@ -63,6 +109,16 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
           <table className="admin-table min-w-245">
             <thead>
               <tr>
+                <th scope="col" className="w-10">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    className="h-4 w-4 cursor-pointer accent-(--brand)"
+                    checked={allSelected}
+                    onChange={() => onToggleSelectAll?.(pageProducts)}
+                    aria-label="Select all products on this page"
+                  />
+                </th>
                 <SortableTh
                   label="Product"
                   sortKey="name"
@@ -78,6 +134,12 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                 <SortableTh
                   label="Segment"
                   sortKey="sub"
+                  sort={table.sort}
+                  onSort={table.toggleSort}
+                />
+                <SortableTh
+                  label="Collections"
+                  sortKey="collections"
                   sort={table.sort}
                   onSort={table.toggleSort}
                 />
@@ -110,11 +172,29 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
               {table.rows.length > 0 ? (
                 table.rows.map((prod) => {
                   const stock = prod.stock ?? 0;
+                  const collectionNames = getCollectionNames(prod);
                   const hasDiscount =
                     prod.discountPrice != null && prod.discountPrice > 0;
+                  const isSelected = selectedIds.has(String(prod._id));
 
                   return (
-                    <tr key={prod._id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={prod._id}
+                      className={`transition-colors ${
+                        isSelected
+                          ? "bg-(--brand-soft)"
+                          : "hover:bg-(--surface-sunken)/70"
+                      }`}
+                    >
+                      <td>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 cursor-pointer accent-(--brand)"
+                          checked={isSelected}
+                          onChange={() => onToggleSelect?.(prod)}
+                          aria-label={`Select ${prod.name}`}
+                        />
+                      </td>
                       <td>
                         <div className="flex items-center gap-3">
                           <Thumb
@@ -127,23 +207,23 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                             <p className="cell-strong truncate max-w-55 text-[13px]">
                               {prod.name}
                             </p>
-                            <span className="cell-sub truncate max-w-55 text-slate-400">
+                            <span className="cell-sub truncate max-w-55 text-(--ink-faint)">
                               {prod.brand || prod.material || "Standard"}
                             </span>
                           </div>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap font-medium text-slate-600">
+                      <td className="whitespace-nowrap font-medium text-(--ink-soft)">
                         {getCategoryName(prod.categoryId)}
                       </td>
                       <td>
                         <div className="flex flex-wrap gap-1.5">
                           {(
-                            Array.isArray(prod.subCategory) &&
-                            prod.subCategory.length
-                              ? prod.subCategory
-                              : prod.subCategory
-                                ? [prod.subCategory]
+                            Array.isArray(prod.gender ?? prod.subCategory) &&
+                            (prod.gender ?? prod.subCategory).length
+                              ? prod.gender ?? prod.subCategory
+                              : (prod.gender ?? prod.subCategory)
+                                ? [prod.gender ?? prod.subCategory]
                                 : ["Men"]
                           ).map((sub) => (
                             <span
@@ -157,18 +237,47 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                           ))}
                         </div>
                       </td>
+                      <td>
+                        <div className="flex flex-wrap gap-1 max-w-45">
+                          {collectionNames.length ? (
+                            <>
+                              {collectionNames.slice(0, 2).map((n) => (
+                                <span
+                                  key={n}
+                                  className="badge badge-brand max-w-35 truncate"
+                                  title={n}
+                                >
+                                  {n}
+                                </span>
+                              ))}
+                              {collectionNames.length > 2 && (
+                                <span
+                                  className="badge"
+                                  title={collectionNames.join(", ")}
+                                >
+                                  +{collectionNames.length - 2}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-[12px] text-(--ink-faint)">
+                              —
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="text-right whitespace-nowrap">
                         {hasDiscount ? (
                           <>
                             <p className="cell-strong text-emerald-600 font-bold">
                               {formatCurrency(prod.discountPrice)}
                             </p>
-                            <span className="cell-sub line-through text-slate-400 text-[11px]">
+                            <span className="cell-sub line-through text-(--ink-faint) text-[11px]">
                               {formatCurrency(prod.price)}
                             </span>
                           </>
                         ) : (
-                          <p className="cell-strong text-slate-900 font-bold">
+                          <p className="cell-strong text-(--ink) font-bold">
                             {formatCurrency(prod.price)}
                           </p>
                         )}
@@ -181,7 +290,7 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                                 ? "text-rose-600"
                                 : stock <= LOW_STOCK
                                   ? "text-amber-600"
-                                  : "text-slate-800"
+                                  : "text-(--ink)"
                             }`}
                           >
                             {stock}
@@ -206,13 +315,13 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                         </div>
                       </td>
                       <td className="text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1 font-bold text-slate-800">
+                        <div className="flex items-center justify-end gap-1 font-bold text-(--ink)">
                           <StarFilledIcon className="w-3.5 h-3.5 text-amber-400" />
                           <span>
                             {(prod.averageRating ?? 0).toFixed(1)}
                           </span>
                         </div>
-                        <span className="cell-sub text-slate-400 text-[11px]">
+                        <span className="cell-sub text-(--ink-faint) text-[11px]">
                           {prod.numOfReviews ?? 0} review
                           {(prod.numOfReviews ?? 0) === 1 ? "" : "s"}
                         </span>
@@ -240,6 +349,16 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                           >
                             <PencilIcon className="w-3.5 h-3.5" />
                           </button>
+                          <a
+                            href={getStorefrontUrl(`/product/${prod._id}`)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="View on Live Storefront"
+                            aria-label={`View ${prod.name} on live storefront`}
+                            className="icon-btn icon-btn-view text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50! dark:hover:bg-indigo-950/40!"
+                          >
+                            <ExternalLinkIcon className="w-3.5 h-3.5" />
+                          </a>
                           {prod.isActive === false && (
                             <button
                               onClick={() => dispatch(restoreProduct(prod._id))}
@@ -265,7 +384,7 @@ const ProductTable = ({ products, onEdit, onCreate }) => {
                 })
               ) : (
                 <tr>
-                  <td colSpan="7" className="empty-cell">
+                  <td colSpan="9" className="empty-cell">
                     <EmptyState
                       icon={<BagIcon className="w-5 h-5" />}
                       title="No products found"

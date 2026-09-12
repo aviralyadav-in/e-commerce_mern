@@ -15,11 +15,33 @@ export const fetchUsers = createAsyncThunk(
   },
 );
 
+// 🆕 Fetch User by ID (full profile + saved addresses)
+export const fetchUserById = createAsyncThunk(
+  "users/fetchById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await API.get(`/users/admin/${id}`);
+      return response.data; // { user, addresses }
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to fetch user details",
+      );
+    }
+  },
+);
+
 export const addUser = createAsyncThunk(
   "users/addUser",
   async (userData, { rejectWithValue }) => {
     try {
-      const response = await API.post("/users/admin", userData);
+      // FormData (photo ke saath create) ya JSON — dono support
+      const response = await API.post(
+        "/users/admin",
+        userData,
+        userData instanceof FormData
+          ? { headers: { "Content-Type": "multipart/form-data" } }
+          : undefined,
+      );
       return response.data.user;
     } catch (error) {
       return rejectWithValue(
@@ -88,16 +110,40 @@ export const removeUserAvatar = createAsyncThunk(
   },
 );
 
+// 🆕 Bulk Create Users / Customers (CSV Upload)
+export const bulkCreateUsers = createAsyncThunk(
+  "users/bulkCreate",
+  async (formData, { rejectWithValue }) => {
+    try {
+      const response = await API.post("/users/admin/bulk", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to bulk upload customers",
+      );
+    }
+  },
+);
+
 const usersSlice = createSlice({
   name: "users",
   initialState: {
     users: [],
+    selectedUser: null,
+    selectedUserAddresses: [],
+    detailLoading: false,
     loading: false,
     error: null,
   },
   reducers: {
     clearUserError: (state) => {
       state.error = null;
+    },
+    clearSelectedUser: (state) => {
+      state.selectedUser = null;
+      state.selectedUserAddresses = [];
     },
   },
   extraReducers: (builder) => {
@@ -128,6 +174,23 @@ const usersSlice = createSlice({
         state.error = action.payload;
       })
 
+      // Bulk Create
+      .addCase(bulkCreateUsers.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(bulkCreateUsers.fulfilled, (state, action) => {
+        state.loading = false;
+        const newUsers = action.payload?.users || [];
+        if (newUsers.length > 0) {
+          state.users.unshift(...newUsers);
+        }
+      })
+      .addCase(bulkCreateUsers.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
       .addCase(updateUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -139,6 +202,9 @@ const usersSlice = createSlice({
         );
         if (index !== -1) {
           state.users[index] = action.payload;
+        }
+        if (state.selectedUser?._id === action.payload?._id) {
+          state.selectedUser = action.payload;
         }
       })
       .addCase(updateUser.rejected, (state, action) => {
@@ -153,27 +219,51 @@ const usersSlice = createSlice({
       .addCase(deleteUser.fulfilled, (state, action) => {
         state.loading = false;
         state.users = state.users.filter((u) => u._id !== action.payload);
+        if (state.selectedUser?._id === action.payload) {
+          state.selectedUser = null;
+          state.selectedUserAddresses = [];
+        }
       })
       .addCase(deleteUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
-      // 🆕 Avatar thunks — list me updated user replace karo
+      // 🆕 Avatar thunks — list me updated user replace karo aur selectedUser sync rakho
       .addCase(uploadUserAvatar.fulfilled, (state, action) => {
         const index = state.users.findIndex(
           (u) => u._id === action.payload._id,
         );
         if (index !== -1) state.users[index] = action.payload;
+        if (state.selectedUser?._id === action.payload?._id) {
+          state.selectedUser = action.payload;
+        }
       })
       .addCase(removeUserAvatar.fulfilled, (state, action) => {
         const index = state.users.findIndex(
           (u) => u._id === action.payload._id,
         );
         if (index !== -1) state.users[index] = action.payload;
+        if (state.selectedUser?._id === action.payload?._id) {
+          state.selectedUser = action.payload;
+        }
+      })
+
+      // 🆕 Fetch User by ID (with addresses)
+      .addCase(fetchUserById.pending, (state) => {
+        state.detailLoading = true;
+      })
+      .addCase(fetchUserById.fulfilled, (state, action) => {
+        state.detailLoading = false;
+        state.selectedUser = action.payload.user;
+        state.selectedUserAddresses = action.payload.addresses || [];
+      })
+      .addCase(fetchUserById.rejected, (state, action) => {
+        state.detailLoading = false;
+        state.error = action.payload;
       });
   },
 });
 
-export const { clearUserError } = usersSlice.actions;
+export const { clearUserError, clearSelectedUser } = usersSlice.actions;
 export default usersSlice.reducer;

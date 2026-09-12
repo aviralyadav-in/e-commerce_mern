@@ -28,7 +28,12 @@ export const addCategory = createAsyncThunk(
       const response = await API.post("/categories/admin", categoryData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      return response.data.category;
+      // 🆕 { category, childCategory } — child re-parent hua ho toh updated
+      // child bhi (table hierarchy turant update ho jaye)
+      return {
+        category: response.data.category,
+        childCategory: response.data.childCategory || null,
+      };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Error adding category");
     }
@@ -44,7 +49,12 @@ export const updateCategory = createAsyncThunk(
       const response = await API.put(`/categories/admin/${id}`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      return response.data.category;
+      // 🆕 { category, childCategory } — child re-parent hua ho toh updated
+      // child bhi (table hierarchy turant update ho jaye)
+      return {
+        category: response.data.category,
+        childCategory: response.data.childCategory || null,
+      };
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Error updating category");
     }
@@ -73,6 +83,23 @@ export const restoreCategory = createAsyncThunk(
       return response.data.category;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || "Error restoring category");
+    }
+  },
+);
+
+// 🆕 Status toggle — active ⇄ inactive (restore ka superset; row toggle)
+export const toggleCategoryStatus = createAsyncThunk(
+  "categories/toggleStatus",
+  async (categoryId, { rejectWithValue }) => {
+    try {
+      const response = await API.patch(
+        `/categories/admin/${categoryId}/toggle-status`,
+      );
+      return response.data.category;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Error toggling category status",
+      );
     }
   },
 );
@@ -130,7 +157,14 @@ const categoriesSlice = createSlice({
       })
       .addCase(addCategory.fulfilled, (state, action) => {
         state.loading = false;
-        state.categories.push(action.payload);
+        state.categories.push(action.payload.category);
+        // 🆕 Child re-parent hua toh us row ko updated version se badlo
+        if (action.payload.childCategory) {
+          const ci = state.categories.findIndex(
+            (c) => c._id === action.payload.childCategory._id,
+          );
+          if (ci !== -1) state.categories[ci] = action.payload.childCategory;
+        }
       })
       .addCase(addCategory.rejected, (state, action) => {
         state.loading = false;
@@ -144,11 +178,19 @@ const categoriesSlice = createSlice({
       })
       .addCase(updateCategory.fulfilled, (state, action) => {
         state.loading = false;
+        const { category, childCategory } = action.payload;
         const index = state.categories.findIndex(
-          (cat) => cat._id === action.payload._id,
+          (cat) => cat._id === category._id,
         );
         if (index !== -1) {
-          state.categories[index] = action.payload;
+          state.categories[index] = category;
+        }
+        // 🆕 Child re-parent hua toh us row ko updated version se badlo
+        if (childCategory) {
+          const ci = state.categories.findIndex(
+            (cat) => cat._id === childCategory._id,
+          );
+          if (ci !== -1) state.categories[ci] = childCategory;
         }
       })
       .addCase(updateCategory.rejected, (state, action) => {
@@ -164,10 +206,13 @@ const categoriesSlice = createSlice({
       })
       .addCase(deleteCategory.fulfilled, (state, action) => {
         state.deleteLoading = false;
-        // Category ko state se hata do
-        state.categories = state.categories.filter(
-          (cat) => cat._id !== action.payload,
+        // Soft delete: category ko inactive mark karo taaki Inactive filter me restore UI dikhe
+        const index = state.categories.findIndex(
+          (cat) => cat._id === action.payload,
         );
+        if (index !== -1) {
+          state.categories[index].isActive = false;
+        }
       })
       .addCase(deleteCategory.rejected, (state, action) => {
         state.deleteLoading = false;
@@ -191,6 +236,25 @@ const categoriesSlice = createSlice({
         }
       })
       .addCase(restoreCategory.rejected, (state, action) => {
+        state.deleteLoading = false;
+        state.error = action.payload;
+      })
+
+      // 🆕 Toggle status — row ko updated category se replace karo
+      .addCase(toggleCategoryStatus.pending, (state) => {
+        state.deleteLoading = true;
+        state.error = null;
+      })
+      .addCase(toggleCategoryStatus.fulfilled, (state, action) => {
+        state.deleteLoading = false;
+        const index = state.categories.findIndex(
+          (cat) => cat._id === action.payload._id,
+        );
+        if (index !== -1) {
+          state.categories[index] = action.payload;
+        }
+      })
+      .addCase(toggleCategoryStatus.rejected, (state, action) => {
         state.deleteLoading = false;
         state.error = action.payload;
       })

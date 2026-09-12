@@ -14,6 +14,9 @@ import {
   UsersIcon,
   HeartIcon,
   CartIcon,
+  PackageIcon,
+  MessageSquareIcon,
+  SettingsIcon,
 } from "../common/Icon";
 
 export const NAV_GROUPS = [
@@ -27,6 +30,7 @@ export const NAV_GROUPS = [
       { path: "/categories", label: "Categories", Icon: GridIcon },
       { path: "/collections", label: "Collections", Icon: TagIcon },
       { path: "/products", label: "Products", Icon: BagIcon },
+      { path: "/inventory", label: "Inventory", Icon: PackageIcon },
       { path: "/banners", label: "Banners", Icon: ImageIcon },
     ],
   },
@@ -47,8 +51,15 @@ export const NAV_GROUPS = [
     title: "Customers",
     links: [
       { path: "/users", label: "Customers", Icon: UsersIcon },
+      { path: "/inquiries", label: "Inquiries", Icon: MessageSquareIcon },
       { path: "/wishlists", label: "Wishlists", Icon: HeartIcon },
       { path: "/carts", label: "Carts", Icon: CartIcon },
+    ],
+  },
+  {
+    title: "System",
+    links: [
+      { path: "/settings", label: "Store Settings", Icon: SettingsIcon },
     ],
   },
 ];

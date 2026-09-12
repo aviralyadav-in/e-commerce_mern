@@ -5,7 +5,8 @@ import { addCoupon, updateCoupon } from "../../features/coupons/couponsSlice";
 import Drawer from "../common/Drawer";
 import { Field, FormAlert } from "../common/Field";
 import { formatCurrency } from "../../utils/format";
-import { TagIcon } from "../common/Icon";
+import { TagIcon, CheckIcon } from "../common/Icon";
+import { notifySuccess, notifyError } from "../../lib/toast";
 
 const CouponModal = ({ isOpen, onClose, editData }) => {
   const dispatch = useDispatch();
@@ -23,7 +24,6 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
   const [touched, setTouched] = useState({});
 
   // Re-seed form state whenever the drawer opens for a different record.
-  // (Render-phase sync via useFormSync — replaces the old setState-in-effect.)
   useFormSync(`${isOpen}|${editData?._id ?? ""}`, () => {
     if (editData) {
       setCode(editData.code || "");
@@ -68,6 +68,9 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
     if (!c.trim()) errs.code = "Coupon code is required.";
     else if (c.trim().length < 3)
       errs.code = "Code must be at least 3 characters.";
+    else if (!/^[A-Z0-9_-]+$/.test(c.trim().toUpperCase()))
+      errs.code =
+        "Code can only contain letters, numbers, hyphens, and underscores.";
 
     if (dv === "" || dv === null || dv === undefined) {
       errs.discountValue = "Discount value is required.";
@@ -79,9 +82,17 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
 
     if (mov !== "" && Number(mov) < 0) {
       errs.minOrderValue = "Min order value cannot be negative.";
+    } else if (
+      dt === "flat" &&
+      mov !== "" &&
+      Number(mov) > 0 &&
+      dv !== "" &&
+      Number(dv) > Number(mov)
+    ) {
+      errs.minOrderValue =
+        "Min spend must be at least equal to flat discount amount.";
     }
 
-    // Usage limits — diya ho to kam se kam 1 (khali = unlimited)
     const ul = "usageLimit" in fields ? fields.usageLimit : usageLimit;
     const pul =
       "perUserLimit" in fields ? fields.perUserLimit : perUserLimit;
@@ -91,6 +102,13 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
     if (pul !== "" && (!Number.isInteger(Number(pul)) || Number(pul) < 1)) {
       errs.perUserLimit =
         "Per-user limit must be a whole number of at least 1.";
+    } else if (
+      ul !== "" &&
+      pul !== "" &&
+      Number(ul) > 0 &&
+      Number(pul) > Number(ul)
+    ) {
+      errs.perUserLimit = "Per-user limit cannot exceed total usage limit.";
     }
 
     if (!ed) errs.expiryDate = "Expiry date is required.";
@@ -104,7 +122,6 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
     return errs;
   };
 
-  /** Live-correct a field only once the user has already left it. */
   const revalidate = (field, value) => {
     if (!touched[field]) return;
     const errs = validate({ [field]: value });
@@ -121,7 +138,48 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
   const invalid = (field) =>
     touched[field] && errors[field] ? "is-invalid" : "";
 
-  const handleSubmit = (e) => {
+  const handlePresetValue = (val) => {
+    setDiscountValue(String(val));
+    setTouched((prev) => ({ ...prev, discountValue: true }));
+    revalidate("discountValue", String(val));
+  };
+
+  const handleDatePreset = (days) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const val = d.toISOString().split("T")[0];
+    setExpiryDate(val);
+    setTouched((prev) => ({ ...prev, expiryDate: true }));
+    revalidate("expiryDate", val);
+  };
+
+  const handleEndOfYear = () => {
+    const year = new Date().getFullYear();
+    const val = `${year}-12-31`;
+    setExpiryDate(val);
+    setTouched((prev) => ({ ...prev, expiryDate: true }));
+    revalidate("expiryDate", val);
+  };
+
+  const handleGenerateCode = () => {
+    const prefixes = [
+      "NIYA",
+      "SAVE",
+      "FESTIVE",
+      "FLASH",
+      "VIP",
+      "LUXE",
+      "WELCOME",
+    ];
+    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    const num = [10, 15, 20, 25, 50, 100][Math.floor(Math.random() * 6)];
+    const generated = `${prefix}${num}`;
+    setCode(generated);
+    setTouched((prev) => ({ ...prev, code: true }));
+    revalidate("code", generated);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setTouched({
       code: true,
@@ -136,11 +194,10 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
     if (Object.keys(errs).length > 0) return;
 
     const couponData = {
-      code: code.toUpperCase(),
+      code: code.trim().toUpperCase(),
       discountType,
       discountValue: Number(discountValue),
       minOrderValue: Number(minOrderValue) || 0,
-      // Khali = unlimited (null bhejo)
       usageLimit:
         usageLimit !== "" && Number(usageLimit) > 0 ? Number(usageLimit) : null,
       perUserLimit:
@@ -155,24 +212,12 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
       ? updateCoupon({ id: editData._id, data: couponData })
       : addCoupon(couponData);
 
-    dispatch(action).then((res) => {
-      if (!res.error) onClose();
-    });
-  };
-
-  /** Plain-English restatement of the rule, so mistakes are obvious pre-save. */
-  const preview = () => {
-    if (!code.trim() || !discountValue || Number(discountValue) <= 0)
-      return null;
-    const off =
-      discountType === "percentage"
-        ? `${discountValue}% off`
-        : `${formatCurrency(discountValue)} off`;
-    const floor =
-      Number(minOrderValue) > 0
-        ? ` on orders above ${formatCurrency(minOrderValue)}`
-        : " with no minimum spend";
-    return `${code.toUpperCase()} gives ${off}${floor}.`;
+    try {
+      await dispatch(action).unwrap();
+      onClose();
+    } catch {
+      // toastMiddleware centrally handles success/error toast
+    }
   };
 
   return (
@@ -180,11 +225,11 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
       isOpen={isOpen}
       onClose={onClose}
       icon={<TagIcon className="w-4 h-4" />}
-      title={editData ? "Edit coupon" : "New coupon"}
+      title={editData ? `Edit Coupon: ${editData.code}` : "Create New Coupon"}
       subtitle={
         editData
-          ? "Change the discount, floor or expiry for this code."
-          : "Create a discount code customers can apply at checkout."
+          ? "Update discount amount, minimum spend, limits, or expiry date."
+          : "Configure a promotional discount code for customer checkout."
       }
       footer={
         <>
@@ -211,32 +256,95 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
         noValidate
         className="space-y-4"
       >
+        {/* Live Storefront Ticket Preview Card */}
+        <div className="p-3.5 rounded-(--radius) border border-dashed border-(--brand)/40 bg-linear-to-br from-(--brand-soft) via-(--surface-card) to-(--surface-card) space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="w-6 h-6 rounded bg-(--brand) text-white flex items-center justify-center font-bold text-[11px] shadow-2xs">
+                %
+              </span>
+              <span className="font-mono text-[14px] font-extrabold tracking-wider text-(--brand)">
+                {code.trim() ? code.toUpperCase() : "COUPONCODE"}
+              </span>
+            </div>
+            <span
+              className={`badge ${isActive ? "badge-success" : "badge-neutral"}`}
+            >
+              <span className="badge-dot" />
+              {isActive ? "Active" : "Paused"}
+            </span>
+          </div>
+
+          <div className="pt-0.5">
+            <p className="text-[15px] font-extrabold text-(--ink) tracking-tight">
+              {discountValue && Number(discountValue) > 0
+                ? discountType === "percentage"
+                  ? `${discountValue}% OFF Total Order`
+                  : `${formatCurrency(discountValue)} Flat Discount`
+                : "Specify discount below"}
+            </p>
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11.5px] text-(--ink-muted) mt-1">
+              <span>
+                {Number(minOrderValue) > 0
+                  ? `Min spend: ${formatCurrency(minOrderValue)}`
+                  : "No minimum spend"}
+              </span>
+              <span>•</span>
+              <span>
+                {expiryDate ? `Valid till ${expiryDate}` : "Select expiry date"}
+              </span>
+              {perUserLimit && (
+                <>
+                  <span>•</span>
+                  <span>Max {perUserLimit} per user</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+
         <Field
-          label="Coupon code"
+          label="Coupon Code"
           required
           htmlFor="coupon-code"
           error={err("code")}
-          hint={err("code") ? undefined : "Shoppers type this at checkout."}
+          hint={
+            err("code")
+              ? undefined
+              : "Customers type this code in their cart/checkout."
+          }
         >
-          <input
-            id="coupon-code"
-            type="text"
-            value={code}
-            onChange={(e) => {
-              const val = e.target.value.toUpperCase();
-              setCode(val);
-              revalidate("code", val);
-            }}
-            onBlur={() => handleBlur("code", code)}
-            placeholder="SUMMER50"
-            className={`form-input form-input-mono font-bold uppercase ${invalid(
-              "code",
-            )}`}
-          />
+          <div className="flex gap-2">
+            <input
+              id="coupon-code"
+              type="text"
+              value={code}
+              onChange={(e) => {
+                const val = e.target.value
+                  .toUpperCase()
+                  .replace(/[^A-Z0-9_-]/g, "");
+                setCode(val);
+                revalidate("code", val);
+              }}
+              onBlur={() => handleBlur("code", code)}
+              placeholder="e.g. FESTIVE20, WELCOME50, SUMMER100"
+              className={`form-input form-input-mono font-bold uppercase tracking-wider flex-1 ${invalid(
+                "code",
+              )}`}
+            />
+            <button
+              type="button"
+              onClick={handleGenerateCode}
+              className="btn btn-secondary text-[11.5px] px-3 shrink-0"
+              title="Generate a random branded coupon code"
+            >
+              Generate
+            </button>
+          </div>
         </Field>
 
         <div className="form-row">
-          <Field label="Discount type" required htmlFor="coupon-type">
+          <Field label="Discount Type" required htmlFor="coupon-type">
             <select
               id="coupon-type"
               value={discountType}
@@ -255,14 +363,14 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
               }}
               className="form-select"
             >
-              <option value="percentage">Percentage (%)</option>
-              <option value="flat">Flat amount (₹)</option>
+              <option value="percentage">Percentage Discount (%)</option>
+              <option value="flat">Flat Rupee Deduction (₹)</option>
             </select>
           </Field>
 
           <Field
             label={
-              discountType === "percentage" ? "Percent off" : "Amount off"
+              discountType === "percentage" ? "Percentage Off (%)" : "Flat Amount (₹)"
             }
             required
             htmlFor="coupon-value"
@@ -271,14 +379,14 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
               err("discountValue")
                 ? undefined
                 : discountType === "percentage"
-                  ? "Percentage of the order total — cannot exceed 100%."
-                  : "Flat ₹ amount deducted from the order total."
+                  ? "Percentage deducted from order total (max 100%)."
+                  : "Direct ₹ amount deducted from checkout total."
             }
           >
             <input
               id="coupon-value"
               type="number"
-              min="0"
+              min="1"
               value={discountValue}
               onChange={(e) => {
                 setDiscountValue(e.target.value);
@@ -291,13 +399,51 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
           </Field>
         </div>
 
+        {/* Quick Discount Presets */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <span className="text-[11px] text-(--ink-faint) font-medium">
+            Quick presets:
+          </span>
+          {discountType === "percentage" ? (
+            [10, 15, 20, 25, 50].map((num) => (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handlePresetValue(num)}
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded border transition-colors cursor-pointer ${
+                  String(discountValue) === String(num)
+                    ? "bg-(--brand) text-white border-(--brand)"
+                    : "border-(--border) text-(--ink-muted) hover:text-(--ink) hover:bg-(--surface-sunken)"
+                }`}
+              >
+                {num}%
+              </button>
+            ))
+          ) : (
+            [100, 200, 500, 1000].map((num) => (
+              <button
+                key={num}
+                type="button"
+                onClick={() => handlePresetValue(num)}
+                className={`px-2 py-0.5 text-[11px] font-semibold rounded border transition-colors cursor-pointer ${
+                  String(discountValue) === String(num)
+                    ? "bg-(--brand) text-white border-(--brand)"
+                    : "border-(--border) text-(--ink-muted) hover:text-(--ink) hover:bg-(--surface-sunken)"
+                }`}
+              >
+                ₹{num}
+              </button>
+            ))
+          )}
+        </div>
+
         <div className="form-row">
           <Field
-            label="Minimum order (₹)"
+            label="Minimum Order Value (₹)"
             optional
             htmlFor="coupon-min"
             error={err("minOrderValue")}
-            hint="Orders below this amount cannot use the coupon. Leave empty for no minimum."
+            hint="Cart subtotal must reach this amount. Leave blank for no minimum."
           >
             <input
               id="coupon-min"
@@ -309,17 +455,17 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
                 revalidate("minOrderValue", e.target.value);
               }}
               onBlur={() => handleBlur("minOrderValue", minOrderValue)}
-              placeholder="999"
+              placeholder="e.g. 999"
               className={`form-input ${invalid("minOrderValue")}`}
             />
           </Field>
 
           <Field
-            label="Expires on"
+            label="Expiry Date"
             required
             htmlFor="coupon-expiry"
             error={err("expiryDate")}
-            hint="Customers can use the coupon up to this date — it stops working afterwards."
+            hint="Last day the coupon can be used at checkout."
           >
             <input
               id="coupon-expiry"
@@ -335,13 +481,41 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
           </Field>
         </div>
 
+        {/* Quick Expiry Date Presets */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <span className="text-[11px] text-(--ink-faint) font-medium">
+            Expiry presets:
+          </span>
+          {[
+            { label: "+7 Days", days: 7 },
+            { label: "+30 Days", days: 30 },
+            { label: "+90 Days", days: 90 },
+          ].map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => handleDatePreset(preset.days)}
+              className="px-2 py-0.5 text-[11px] font-semibold rounded border border-(--border) text-(--ink-muted) hover:text-(--ink) hover:bg-(--surface-sunken) transition-colors cursor-pointer"
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={handleEndOfYear}
+            className="px-2 py-0.5 text-[11px] font-semibold rounded border border-(--border) text-(--ink-muted) hover:text-(--ink) hover:bg-(--surface-sunken) transition-colors cursor-pointer"
+          >
+            End of Year
+          </button>
+        </div>
+
         <div className="form-row">
           <Field
-            label="Total usage limit"
+            label="Total Usage Limit"
             optional
             htmlFor="coupon-usage-limit"
             error={err("usageLimit")}
-            hint="How many times this coupon can be used in total. Leave empty for unlimited."
+            hint="Maximum total times this coupon can be used across all shoppers. Leave blank for unlimited."
           >
             <input
               id="coupon-usage-limit"
@@ -353,17 +527,17 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
                 revalidate("usageLimit", e.target.value);
               }}
               onBlur={() => handleBlur("usageLimit", usageLimit)}
-              placeholder="100"
+              placeholder="e.g. 100 (unlimited if empty)"
               className={`form-input ${invalid("usageLimit")}`}
             />
           </Field>
 
           <Field
-            label="Per-user limit"
+            label="Per-Customer Limit"
             optional
             htmlFor="coupon-user-limit"
             error={err("perUserLimit")}
-            hint="How many times each customer can use it. Leave empty for unlimited."
+            hint="Max times a single customer can apply it. Leave blank for unlimited."
           >
             <input
               id="coupon-user-limit"
@@ -375,16 +549,16 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
                 revalidate("perUserLimit", e.target.value);
               }}
               onBlur={() => handleBlur("perUserLimit", perUserLimit)}
-              placeholder="1"
+              placeholder="e.g. 1 (recommended)"
               className={`form-input ${invalid("perUserLimit")}`}
             />
           </Field>
         </div>
 
         <Field
-          label="Status"
+          label="Coupon Status"
           htmlFor="coupon-status"
-          hint="Paused coupons stay in the list but stop working at checkout."
+          hint="Paused coupons stay preserved in your dashboard but cannot be redeemed at checkout."
         >
           <select
             id="coupon-status"
@@ -392,17 +566,10 @@ const CouponModal = ({ isOpen, onClose, editData }) => {
             onChange={(e) => setIsActive(e.target.value === "active")}
             className="form-select"
           >
-            <option value="active">Active</option>
-            <option value="inactive">Paused</option>
+            <option value="active">Active (Usable by customers)</option>
+            <option value="inactive">Paused (Temporarily disabled)</option>
           </select>
         </Field>
-
-        {preview() && (
-          <div className="flex items-start gap-2 px-3 py-2.5 rounded-(--radius) bg-(--brand-soft) border border-orange-200">
-            <TagIcon className="w-4 h-4 text-(--brand) shrink-0 mt-px" />
-            <p className="text-[12.5px] text-(--ink-soft)">{preview()}</p>
-          </div>
-        )}
       </form>
     </Drawer>
   );

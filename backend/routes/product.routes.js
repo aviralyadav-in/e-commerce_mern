@@ -8,6 +8,7 @@ import {
   getProducts,
   restoreProduct,
   updateProduct,
+  updateProductStock,
 } from "../controllers/product.controller.js";
 
 import { protectedRoute } from "../middleware/auth.middleware.js";
@@ -51,6 +52,9 @@ productRouter.put(
 
 // Soft delete ke baad restore
 productRouter.patch("/admin/:id/restore", adminRoute, restoreProduct);
+
+// Quick stock update (inline inventory ledger)
+productRouter.patch("/admin/:id/stock", adminRoute, updateProductStock);
 
 productRouter.delete("/admin/:id", adminRoute, deleteProduct);
 

@@ -1,27 +1,9 @@
 ﻿import mongoose from "mongoose";
 
-// 🆕 Automated collection ke rules — har rule ek condition hai jaise
-// price > 5000 ya createdAt 30 din ke andar.
-const ruleSchema = new mongoose.Schema(
-  {
-    field: {
-      type: String,
-      enum: ["price", "stock", "createdAt", "subCategory"],
-      required: true,
-    },
-    operator: {
-      type: String,
-      enum: ["gt", "gte", "lt", "lte", "eq", "withinDays"],
-      required: true,
-    },
-    value: { type: mongoose.Schema.Types.Mixed },
-  },
-  { _id: false },
-);
-
 // 🆕 COLLECTIONS — marketing/curation entity (Categories se bilkul alag).
 // Categories = catalog structure (hierarchy), Collections = marketing groups
-// (manual picks ya automated rules) — Shopify jaisa separation.
+// (manual picks — products admin khud link karta hai) — Shopify jaisa separation.
+// Sab collections manual hain — products admin khud link karta hai.
 const collectionSchema = new mongoose.Schema(
   {
     name: {
@@ -48,18 +30,6 @@ const collectionSchema = new mongoose.Schema(
     image: {
       type: String,
       default: "",
-    },
-    // manual = admin khud products link karta hai
-    // automated = rules match hone par products automatically member
-    type: {
-      type: String,
-      enum: ["manual", "automated"],
-      default: "manual",
-    },
-    // sirf automated collections ke liye — membership rules
-    rules: {
-      type: [ruleSchema],
-      default: [],
     },
     isActive: {
       type: Boolean,

@@ -3,7 +3,12 @@ import { Admin } from "../models/admin.model.js";
 
 export const adminRoute = async (req, res, next) => {
   try {
-    const token = req.cookies.adminToken; // 🛠️ FIX: alag cookie naam — user 'token' se collision nahi
+    const authHeader = req.headers.authorization;
+    const bearerToken =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7).trim()
+        : null;
+    const token = req.cookies.adminToken || bearerToken; // 🛠️ FIX: alag cookie naam — user 'token' se collision nahi; Authorization header fallback support
 
     if (!token) {
       return res.status(401).json({
@@ -32,8 +37,6 @@ export const adminRoute = async (req, res, next) => {
     req.admin = admin; // req.admin set kar diya taaki confusion na ho
     next();
   } catch (error) {
-    console.error("Admin Auth Middleware Error:", error);
-
     if (
       error.name === "TokenExpiredError" ||
       error.name === "JsonWebTokenError"
@@ -43,6 +46,7 @@ export const adminRoute = async (req, res, next) => {
       });
     }
 
+    console.error("Admin Auth Middleware Error:", error);
     return res.status(500).json({
       message: "Internal server error",
     });

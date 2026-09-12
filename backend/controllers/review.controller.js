@@ -199,9 +199,14 @@ export const adminSetReviewStatus = async (req, res) => {
     // Approved/Hidden hone par product rating dobara calculate hogi
     await updateProductRating(review.product);
 
+    // Re-populate user and product so Redux state does not wipe customer/product details
+    const populatedReview = await Review.findById(review._id)
+      .populate("user", "name email avatar")
+      .populate("product", "name images price");
+
     return res.status(200).json({
       message: `Review status updated to ${status}`,
-      review,
+      review: populatedReview || review,
     });
   } catch (error) {
     console.error("Admin Set Review Status Error:", error);

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { genderArraySchema } from "./genderSchema.js";
 
 export const categoryValidationSchema = z.object({
   name: z
@@ -26,14 +27,8 @@ export const categoryValidationSchema = z.object({
 
   image: z.string().optional().default(""),
 
-  subCategories: z
-    .array(
-      z.enum(["Men", "Women"], {
-        error: "Sub-category must be Men or Women",
-      }),
-    )
-    .min(1, "Select at least one sub-category (Men or Women)")
-    .default(["Men", "Women"]),
+  // FormData me JSON string '["Men","Women"]' aata hai — schema array bana deta hai
+  gender: genderArraySchema(["Men", "Women"]),
 
   isActive: z
     .boolean({
@@ -43,10 +38,36 @@ export const categoryValidationSchema = z.object({
     .default(true),
 
   // 🆕 Hierarchy — parent category (optional; "" ya null = top-level).
-  // Controller FormData ka empty string null bana deta hai.
   parentId: z
-    .string()
-    .regex(/^[0-9a-fA-F]{24}$/, "Invalid parent category ID")
-    .nullable()
-    .optional(),
+    .preprocess((val) => {
+      if (val === "" || val === "null" || val === "undefined") return null;
+      return val;
+    }, z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid parent category ID").nullable().optional()),
+
+  // 🆕 Hierarchy manager — existing category ko is category ke under
+  // child banane ke liye (controller re-parent + cycle-guard karta hai).
+  childId: z
+    .preprocess((val) => {
+      if (val === "" || val === "null" || val === "undefined") return null;
+      return val;
+    }, z.string().regex(/^[0-9a-fA-F]{24}$/, "Invalid child category ID").nullable().optional()),
 });
+
+/* =========================================================
+   🆕 REUSABLE HIERARCHY SCHEMAS
+   - createCategorySchema: full payload (FormData-safe coercion)
+   - updateCategorySchema: partial (PUT /admin/:id)
+   - Depth/circular rules controller me enforce hote hain
+   (DB reads chahiye isliye Zod me nahi)
+========================================================= */
+export const createCategorySchema = categoryValidationSchema.extend({
+  sortOrder: z.coerce
+    .number({ error: "Sort order must be a number" })
+    .int("Sort order must be an integer")
+    .min(0, "Sort order cannot be negative")
+    .max(9999, "Sort order cannot exceed 9999")
+    .optional()
+    .default(0),
+});
+
+export const updateCategorySchema = createCategorySchema.partial();

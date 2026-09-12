@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F7F4EE" />
+      <stop offset="100%" stop-color="#ECE6DB" />
+    </linearGradient>
+    <linearGradient id="leatherGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2D2926" />
+      <stop offset="50%" stop-color="#1A1817" />
+      <stop offset="100%" stop-color="#12100F" />
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5D1B5" />
+      <stop offset="50%" stop-color="#C5A880" />
+      <stop offset="100%" stop-color="#9E7E52" />
+    </linearGradient>
+    <filter id="bagShadow" x="-10%" y="-10%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#141414" flood-opacity="0.15" />
+    </filter>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="400" height="500" fill="url(#bgGrad)" />
+
+  <!-- Subtle grid/cross-stitch watermark pattern -->
+  <g opacity="0.04" stroke="#141414" stroke-width="1">
+    <line x1="40" y1="0" x2="40" y2="500" />
+    <line x1="200" y1="0" x2="200" y2="500" />
+    <line x1="360" y1="0" x2="360" y2="500" />
+    <line x1="0" y1="250" x2="400" y2="250" />
+  </g>
+
+  <g filter="url(#bagShadow)">
+    <!-- Bag Handles -->
+    <path d="M150,210 C150,110 250,110 250,210" fill="none" stroke="#221F1D" stroke-width="10" stroke-linecap="round" />
+    <path d="M150,210 C150,110 250,110 250,210" fill="none" stroke="url(#leatherGrad)" stroke-width="8" stroke-linecap="round" />
+    
+    <!-- Handle Hardware / Gold Rings -->
+    <rect x="144" y="200" width="12" height="18" rx="4" fill="url(#goldGrad)" />
+    <rect x="244" y="200" width="12" height="18" rx="4" fill="url(#goldGrad)" />
+
+    <!-- Bag Silhouette Body -->
+    <path d="M110,210 L290,210 C305,210 316,222 318,237 L330,360 C332,375 320,388 305,388 L95,388 C80,388 68,375 70,360 L82,237 C84,222 95,210 110,210 Z" fill="url(#leatherGrad)" />
+
+    <!-- Flap & Subtle Leather Seam Stitching -->
+    <path d="M115,215 L285,215 C295,215 303,223 304,233 L308,285 C308,295 295,302 200,305 C105,302 92,295 92,285 L96,233 C97,223 105,215 115,215 Z" fill="#24211F" opacity="0.9" />
+    <path d="M115,218 L285,218" fill="none" stroke="#6B6661" stroke-width="1" stroke-dasharray="3,3" opacity="0.5" />
+
+    <!-- Gold Center Lock / Emblem -->
+    <rect x="190" y="295" width="20" height="22" rx="3" fill="url(#goldGrad)" />
+    <circle cx="200" cy="306" r="3" fill="#141414" />
+  </g>
+
+  <!-- Brand Typography Watermark -->
+  <text x="200" y="440" font-family="'Playfair Display', Georgia, serif" font-size="14" font-weight="600" letter-spacing="4" fill="#6B6661" text-anchor="middle">NIYA ATELIER</text>
+  <text x="200" y="458" font-family="'Plus Jakarta Sans', sans-serif" font-size="10" font-weight="500" letter-spacing="2" fill="#9E968D" text-anchor="middle">HANDCRAFTED FULL-GRAIN</text>
+</svg>

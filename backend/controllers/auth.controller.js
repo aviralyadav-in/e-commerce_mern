@@ -1,13 +1,12 @@
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
-import fs from "fs/promises";
-import path from "path";
 import { User } from "../models/user.model.js"; // Aapke path ke hisab se
 import {
   loginSchema,
   updateProfileSchema,
   userValidationSchema,
 } from "../validators/userValidate.js";
+import { deleteFile as deleteFromCloudinary } from "../utils/storage.js";
 
 /* ==========================================
    🔐 AUTH COOKIE OPTIONS (single source of truth)
@@ -19,13 +18,21 @@ import {
 ========================================== */
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
-const authCookieOptions = (withMaxAge = false) => ({
-  httpOnly: true,
-  secure: process.env.COOKIE_SECURE === "true",
-  sameSite: "lax",
-  path: "/",
-  ...(withMaxAge ? { maxAge: SEVEN_DAYS } : {}),
-});
+const authCookieOptions = (withMaxAge = false) => {
+  const sameSite = process.env.COOKIE_SAME_SITE || "lax";
+  const secure =
+    process.env.COOKIE_SECURE !== undefined
+      ? process.env.COOKIE_SECURE === "true"
+      : sameSite === "none";
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite,
+    path: "/",
+    ...(withMaxAge ? { maxAge: SEVEN_DAYS } : {}),
+  };
+};
 
 // ==========================================
 // 1. SIGNUP CONTROLLER
@@ -44,8 +51,7 @@ export const signup = async (req, res) => {
     }
 
     // Corrected fields according to your schema
-    const { name, email, password, phone, avatar, gender, dateOfBirth } =
-      result.data;
+    const { name, email, password, phone, gender, dateOfBirth } = result.data;
 
     // Check only Email (Kyunki schema me sirf email unique hai, username nahi hai)
     const existingUser = await User.findOne({ email });
@@ -63,7 +69,6 @@ export const signup = async (req, res) => {
       email,
       password: hashedPassword,
       phone,
-      avatar,
       gender,
       dateOfBirth,
     });
@@ -84,6 +89,9 @@ export const signup = async (req, res) => {
     });
   } catch (error) {
     console.error("Signup Error:", error);
+    if (error.code === 11000) {
+      return res.status(409).json({ message: "Email already registered" });
+    }
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -142,7 +150,17 @@ export const login = async (req, res) => {
 // ==========================================
 export const adminLogin = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    // Zod validation (login jaisa hi contract — adminValidate ka schema
+    // create-admin ke liye hai, login ke liye shared loginSchema use karo)
+    const result = loginSchema.safeParse(req.body);
+    if (!result.success) {
+      return res.status(400).json({
+        message: result.error.issues[0].message,
+        errors: result.error.flatten().fieldErrors,
+      });
+    }
+
+    const { email, password } = result.data;
 
     // Admin model se find karenge
     const { Admin } = await import("../models/admin.model.js");
@@ -219,13 +237,11 @@ export const adminLogout = async (req, res) => {
 // ==========================================
 export const logout = async (req, res) => {
   try {
-    // FIX: req.user could be undefined if admin logged out via this route
-    const name = req.user?.name || "User";
-
+    // Route public hai (expired/invalid token par bhi cookie clear ho sake)
     res.clearCookie("token", authCookieOptions());
 
     return res.status(200).json({
-      message: `${name} Logged out successfully`,
+      message: "User Logged out successfully",
     });
   } catch (error) {
     console.error("Logout Error:", error);
@@ -316,38 +332,9 @@ export const updateProfile = async (req, res) => {
 };
 
 /* ==========================================
-   🆕 LOCAL FILE CLEANUP HELPER (avatar ke liye)
-   External (http) URLs ko skip karta hai
-========================================== */
-// 🛡️ Security root — sirf is folder ke andar ki files hi delete ho sakti hain
-const UPLOADS_ROOT = path.resolve(process.cwd(), "uploads");
-
-const deleteLocalFile = async (imagePath) => {
-  if (!imagePath || imagePath.startsWith("http")) return;
-  try {
-    const filePath = path.resolve(
-      process.cwd(),
-      imagePath.replace(/^\/+/, ""),
-    );
-
-    // 🛡️ Path traversal guard — kabhi uploads/ ke bahar delete na ho
-    if (!filePath.startsWith(UPLOADS_ROOT + path.sep)) {
-      console.warn("Blocked avatar delete outside uploads dir:", imagePath);
-      return;
-    }
-
-    await fs.unlink(filePath);
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      console.error("Delete Avatar File Error:", error);
-    }
-  }
-};
-
-/* ==========================================
    🆕 UPDATE AVATAR (profile photo upload)
    multipart/form-data → field: 'avatar'
-   Purani local photo delete karke nayi set hoti hai
+   Purani Cloudinary photo delete karke nayi set hoti hai
 ========================================== */
 export const updateAvatar = async (req, res) => {
   try {
@@ -357,14 +344,14 @@ export const updateAvatar = async (req, res) => {
       });
     }
 
-    const newAvatarPath = `/uploads/avatars/${req.file.filename}`;
+    const newAvatarPath = req.file.path;
     const userId = req.user._id;
 
     // ⚡ Optimized: sirf 'avatar' field fetch hoti hai (poora document nahi)
     const oldUser = await User.findById(userId).select("avatar");
     if (!oldUser) {
-      // User exist nahi karta — bina orphan file chhode clean karo
-      await deleteLocalFile(newAvatarPath);
+      // User exist nahi karta — uploaded Cloudinary file clean karo
+      await deleteFromCloudinary(newAvatarPath);
       return res.status(404).json({ message: "User not found" });
     }
 
@@ -376,15 +363,14 @@ export const updateAvatar = async (req, res) => {
     );
 
     if (!updatedUser) {
-      await deleteLocalFile(newAvatarPath);
+      await deleteFromCloudinary(newAvatarPath);
       return res.status(404).json({ message: "User not found" });
     }
 
     // ✅ Correct order: DB update hone ke BAAD purani file delete karo.
-    //    - DB update fail ho jaye → user ki purani photo bachi rehti hai
-    //    - File delete fail ho jaye → sirf orphan file bachi hai (chhoti problem)
-    //    (Pehle file pehle delete hoti thi — save fail hone par photo chali jaati)
-    await deleteLocalFile(oldUser.avatar);
+    if (oldUser.avatar) {
+      await deleteFromCloudinary(oldUser.avatar);
+    }
 
     return res.status(200).json({
       message: "Profile photo updated successfully",
@@ -394,7 +380,7 @@ export const updateAvatar = async (req, res) => {
     console.error("Update Avatar Error:", error);
     // Upload hui file agar DB save fail ho jaye to clean karo
     if (req.file) {
-      await deleteLocalFile(`/uploads/avatars/${req.file.filename}`);
+      await deleteFromCloudinary(req.file.path);
     }
     return res.status(500).json({ message: "Internal server error" });
   }
@@ -428,8 +414,8 @@ export const removeAvatar = async (req, res) => {
       { returnDocument: "after" },
     );
 
-    // ✅ DB safe hone ke baad hi file delete karo
-    await deleteLocalFile(oldUser.avatar);
+    // ✅ DB safe hone ke baad hi Cloudinary se file delete karo
+    await deleteFromCloudinary(oldUser.avatar);
 
     return res.status(200).json({
       message: "Profile photo removed successfully",

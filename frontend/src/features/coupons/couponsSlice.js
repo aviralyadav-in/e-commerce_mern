@@ -61,6 +61,23 @@ export const deleteCoupon = createAsyncThunk(
   },
 );
 
+// 5. Bulk Create Coupons (CSV Upload)
+export const bulkCreateCoupons = createAsyncThunk(
+  "coupons/bulkCreate",
+  async (formData, { rejectWithValue }) => {
+    try {
+      const response = await API.post("/coupons/bulk", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to bulk upload coupons",
+      );
+    }
+  },
+);
+
 const couponsSlice = createSlice({
   name: "coupons",
   initialState: {
@@ -132,6 +149,23 @@ const couponsSlice = createSlice({
         state.coupons = state.coupons.filter((c) => c._id !== action.payload);
       })
       .addCase(deleteCoupon.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // Bulk Create
+      .addCase(bulkCreateCoupons.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(bulkCreateCoupons.fulfilled, (state, action) => {
+        state.loading = false;
+        const newCoupons = action.payload?.coupons || [];
+        if (newCoupons.length > 0) {
+          state.coupons.unshift(...newCoupons);
+        }
+      })
+      .addCase(bulkCreateCoupons.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

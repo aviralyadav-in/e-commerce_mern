@@ -5,6 +5,7 @@ import {
   getBannerById,
   updateBanner,
   deleteBanner,
+  toggleBannerStatus,
 } from "../controllers/banner.controller.js";
 import { adminRoute } from "../middleware/admin.middleware.js";
 
@@ -23,6 +24,7 @@ bannerRouter.put(
   bannerUpload.single("image"),
   updateBanner,
 );
+bannerRouter.patch("/:id/toggle-status", adminRoute, toggleBannerStatus);
 bannerRouter.delete("/:id", adminRoute, deleteBanner);
 
 export default bannerRouter;

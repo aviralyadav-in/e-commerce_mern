@@ -1,69 +1,43 @@
-import fs from "fs/promises";
-import path from "path";
 import mongoose from "mongoose";
-import { categoryValidationSchema } from "../validators/categoryValidate.js";
+import {
+  createCategorySchema,
+  updateCategorySchema,
+} from "../validators/categoryValidate.js";
 import { Category } from "../models/category.model.js";
 import { Product } from "../models/product.model.js";
 import { csvToObjects, slugify, toBool } from "../utils/csvParser.js";
+import { deleteFile as deleteFromCloudinary } from "../utils/storage.js";
+import { escapeRegex } from "../utils/escapeRegex.js";
+import { splitByModelValidation } from "../utils/validateDoc.js";
+import {
+  checkHierarchyChange,
+  rebuildCategoryHierarchy,
+} from "../utils/categoryHierarchy.js";
 
-const deleteImageFile = async (imagePath) => {
-  if (!imagePath) return;
-
-  // Do not delete external images
-  if (imagePath.startsWith("http")) return;
-
-  try {
-    const filePath = path.join(process.cwd(), imagePath.replace(/^\/+/, ""));
-    await fs.unlink(filePath);
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      console.error("Delete Image File Error:", error);
-    }
-  }
-};
-
-const escapeRegex = (value) => {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// multipart/form-data me boolean string format ('true'/'false') me aata hai,
+// isko parse karna zaroori hai warna Zod fail ho jayega.
+// (gender JSON string, sortOrder aur parentId/childId schema khud normalize karta hai)
+const parseBooleanFields = (body) => {
+  if (body.isActive === "true") body.isActive = true;
+  if (body.isActive === "false") body.isActive = false;
 };
 
 /* =========================================================
    CREATE CATEGORY
 ========================================================= */
 export const createCategory = async (req, res) => {
+  let imageSaved = false;
   try {
-    /* -------------------------
-       Fix: FormData Boolean Conversion
-    ------------------------- */
-    // multipart/form-data me boolean string format ('true'/'false') me aata hai,
-    // isko parse karna zaroori hai warna Zod fail ho jayega.
-    if (req.body.isActive === "true") req.body.isActive = true;
-    if (req.body.isActive === "false") req.body.isActive = false;
-
-    // 🆕 parentId — FormData me "" (top-level) ya ObjectId string aata hai
-    if (req.body.parentId === "" || req.body.parentId === "null") {
-      req.body.parentId = null;
-    }
-
-    // FormData me subCategories JSON string / single value aa sakta hai
-    if (typeof req.body.subCategories === "string") {
-      try {
-        const parsed = JSON.parse(req.body.subCategories);
-        req.body.subCategories = Array.isArray(parsed)
-          ? parsed
-          : [req.body.subCategories];
-      } catch {
-        req.body.subCategories = [req.body.subCategories];
-      }
-    }
+    parseBooleanFields(req.body);
 
     /* -------------------------
        Zod Validation (Only Body)
     ------------------------- */
-    const result = categoryValidationSchema.safeParse(req.body);
+    const result = createCategorySchema.safeParse(req.body);
 
     if (!result.success) {
       if (req.file) {
-        await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+        await deleteFromCloudinary(req.file.path);
       }
       return res.status(400).json({
         message: result.error.issues[0].message,
@@ -71,9 +45,16 @@ export const createCategory = async (req, res) => {
       });
     }
 
-    // Fix: parentCategory hata diya gaya hai kyunki schema me nahi hai
-    const { name, slug, description, isActive, subCategories, parentId } =
-      result.data;
+    const {
+      name,
+      slug,
+      description,
+      isActive,
+      gender,
+      parentId,
+      childId,
+      sortOrder,
+    } = result.data;
 
     /* -------------------------
        Duplicate Check (Name OR Slug)
@@ -87,7 +68,7 @@ export const createCategory = async (req, res) => {
 
     if (existingCategory) {
       if (req.file)
-        await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+        await deleteFromCloudinary(req.file.path);
       return res.status(409).json({
         message:
           existingCategory.slug === slug
@@ -97,40 +78,55 @@ export const createCategory = async (req, res) => {
     }
 
     /* -------------------------
-       🆕 Parent category validation — exist karti ho
+       🆕 Hierarchy validation — parent/child exist karein,
+       cycle na bane, tree 3 levels se gehra na ho
     ------------------------- */
-    if (parentId) {
-      const parentExists = await Category.findById(parentId).lean();
-      if (!parentExists) {
-        if (req.file)
-          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
-        return res.status(400).json({ message: "Parent category not found" });
-      }
+    const hierarchyError = await checkHierarchyChange({ parentId, childId });
+    if (hierarchyError) {
+      if (req.file)
+        await deleteFromCloudinary(req.file.path);
+      return res.status(400).json({ message: hierarchyError });
     }
 
     /* -------------------------
        Handle Image & Create
     ------------------------- */
-    const imageUrl = req.file ? `/uploads/categories/${req.file.filename}` : "";
-
     const category = await Category.create({
       name,
       slug,
-      description: description || "",
-      isActive: isActive !== undefined ? isActive : true,
+      description,
+      isActive,
+      gender,
+      sortOrder,
       parentId: parentId || null,
-      subCategories: subCategories?.length ? subCategories : ["Men", "Women"],
-      image: imageUrl,
+      image: req.file ? req.file.path : "",
     });
+    imageSaved = true;
+
+    // 🆕 Advanced re-parent — existing category ko is category ke under move karo
+    if (childId) {
+      await Category.findByIdAndUpdate(childId, {
+        $set: { parentId: category._id },
+      });
+    }
+
+    // level/path computed fields — naya node + moved child ka subtree
+    await rebuildCategoryHierarchy();
+
+    const [savedCategory, childCategory] = await Promise.all([
+      Category.findById(category._id),
+      childId ? Category.findById(childId) : null,
+    ]);
 
     return res.status(201).json({
       message: "Category created successfully",
-      category,
+      category: savedCategory,
+      childCategory,
     });
   } catch (error) {
     console.error("Create Category Error:", error);
-    if (req.file) {
-      await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+    if (req.file && !imageSaved) {
+      await deleteFromCloudinary(req.file.path);
     }
     return res.status(500).json({ message: "Internal Server Error" });
   }
@@ -187,54 +183,49 @@ export const getCategoryById = async (req, res) => {
    UPDATE CATEGORY
 ========================================================= */
 export const updateCategory = async (req, res) => {
+  let imageSaved = false;
   try {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
+      if (req.file)
+        await deleteFromCloudinary(req.file.path);
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
     const category = await Category.findById(id);
     if (!category) {
+      if (req.file)
+        await deleteFromCloudinary(req.file.path);
       return res.status(404).json({ message: "Category not found" });
     }
 
-    /* -------------------------
-       Fix: FormData Boolean Conversion
-    ------------------------- */
-    if (req.body.isActive === "true") req.body.isActive = true;
-    if (req.body.isActive === "false") req.body.isActive = false;
-
-    // 🆕 parentId — FormData me "" (top-level) ya ObjectId string aata hai
-    if (req.body.parentId === "" || req.body.parentId === "null") {
-      req.body.parentId = null;
-    }
-
-    if (typeof req.body.subCategories === "string") {
-      try {
-        const parsed = JSON.parse(req.body.subCategories);
-        req.body.subCategories = Array.isArray(parsed)
-          ? parsed
-          : [req.body.subCategories];
-      } catch {
-        req.body.subCategories = [req.body.subCategories];
-      }
-    }
+    parseBooleanFields(req.body);
 
     /* -------------------------
        Zod Partial Validation
     ------------------------- */
-    const result = categoryValidationSchema.partial().safeParse(req.body);
+    const result = updateCategorySchema.safeParse(req.body);
 
     if (!result.success) {
       if (req.file)
-        await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+        await deleteFromCloudinary(req.file.path);
       return res.status(400).json({
         message: result.error.issues[0].message,
       });
     }
 
-    const updateData = { ...result.data };
+    // 🛠️ DEFAULT-LEAK GUARD — partial() + default(): missing fields me
+    // defaults (image="", description="", isActive=true...) inject hokar
+    // existing values wipe na hon. Sirf request me bheji fields rakho.
+    const updateData = {};
+    Object.keys(result.data).forEach((key) => {
+      if (req.body[key] !== undefined) updateData[key] = result.data[key];
+    });
+
+    // childId category ka field nahi — sirf "is category ke under move karo" instruction
+    const { childId } = updateData;
+    delete updateData.childId;
 
     /* -------------------------
        Duplicate Check (Excluding self)
@@ -256,7 +247,7 @@ export const updateCategory = async (req, res) => {
 
       if (existingCategory) {
         if (req.file)
-          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+          await deleteFromCloudinary(req.file.path);
         return res
           .status(409)
           .json({ message: "Category name or slug already in use" });
@@ -264,49 +255,71 @@ export const updateCategory = async (req, res) => {
     }
 
     /* -------------------------
-       🆕 Parent category validation — khud ko parent na banao,
-       parent exist karti ho
+       🆕 Hierarchy validation — parent badla ya child move hua toh
+       self-parent / cycle / max depth rules check
     ------------------------- */
-    if (updateData.parentId) {
-      if (String(updateData.parentId) === String(id)) {
+    const currentParentId = category.parentId ? String(category.parentId) : null;
+    const nextParentId =
+      updateData.parentId !== undefined
+        ? updateData.parentId || null
+        : currentParentId;
+    const hierarchyChanged =
+      String(nextParentId) !== String(currentParentId) || Boolean(childId);
+
+    if (hierarchyChanged) {
+      const hierarchyError = await checkHierarchyChange({
+        categoryId: id,
+        parentId: nextParentId,
+        childId,
+      });
+      if (hierarchyError) {
         if (req.file)
-          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
-        return res
-          .status(400)
-          .json({ message: "Category cannot be its own parent" });
-      }
-      const parentExists = await Category.findById(updateData.parentId).lean();
-      if (!parentExists) {
-        if (req.file)
-          await deleteImageFile(`/uploads/categories/${req.file.filename}`);
-        return res.status(400).json({ message: "Parent category not found" });
+          await deleteFromCloudinary(req.file.path);
+        return res.status(400).json({ message: hierarchyError });
       }
     }
 
     /* -------------------------
        Handle Image Replacement
+       - Image sirf file upload se set hoti hai (body ki string ignore)
+       - Purani image DB update ke BAAD delete hoti hai, taaki update
+         fail ho toh category ek deleted image par point na kare
     ------------------------- */
-    if (req.file) {
-      updateData.image = `/uploads/categories/${req.file.filename}`;
-      if (category.image && updateData.image !== category.image) {
-        await deleteImageFile(category.image);
-      }
-    }
+    delete updateData.image;
+    if (req.file) updateData.image = req.file.path;
 
-    const updatedCategory = await Category.findByIdAndUpdate(
+    let updatedCategory = await Category.findByIdAndUpdate(
       id,
       { $set: updateData },
       { returnDocument: "after", runValidators: true },
     );
+    imageSaved = true;
+
+    if (req.file && category.image) {
+      await deleteFromCloudinary(category.image);
+    }
+
+    let childCategory = null;
+    if (hierarchyChanged) {
+      if (childId) {
+        await Category.findByIdAndUpdate(childId, { $set: { parentId: id } });
+      }
+      await rebuildCategoryHierarchy();
+      [updatedCategory, childCategory] = await Promise.all([
+        Category.findById(id),
+        childId ? Category.findById(childId) : null,
+      ]);
+    }
 
     return res.status(200).json({
       message: "Category updated successfully",
       category: updatedCategory,
+      childCategory,
     });
   } catch (error) {
     console.error("Update Category Error:", error);
-    if (req.file)
-      await deleteImageFile(`/uploads/categories/${req.file.filename}`);
+    if (req.file && !imageSaved)
+      await deleteFromCloudinary(req.file.path);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -345,7 +358,7 @@ export const restoreCategory = async (req, res) => {
     const category = await Category.findByIdAndUpdate(
       id,
       { isActive: true },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!category) {
@@ -396,6 +409,8 @@ export const deleteCategory = async (req, res) => {
     // 🆕 Parent delete hone par children top-level ho jaate hain
     await Category.updateMany({ parentId: id }, { $set: { parentId: null } });
     await Category.findByIdAndUpdate(id, { isActive: false });
+    // Top-level bane children (aur unke subtree) ka level/path update
+    await rebuildCategoryHierarchy();
 
     return res.status(200).json({
       message: "Category deactivated successfully (soft deleted)",
@@ -450,10 +465,11 @@ export const getCategoryProducts = async (req, res) => {
 /* =========================================================
    🆕 BULK CREATE CATEGORIES (CSV Upload)
    -------------------------------------------------------
-   Columns: name* | description | subCategories ("Men,Women") | isActive
+   Columns: name* | description | gender ("Men,Women") | isActive
    - Slug naam se auto-generate hota hai
    - Duplicates (DB ya file ke andar) skip hote hain
-   - insertMany ordered:false — invalid rows baaki ko block nahi karte
+   - Model rules par fail hone wali rows invalidRows me report hoti hain
+     (insertMany ordered:false unhe chupchaap drop kar deta)
 ========================================================= */
 export const bulkCreateCategories = async (req, res) => {
   try {
@@ -474,7 +490,7 @@ export const bulkCreateCategories = async (req, res) => {
     if (!("name" in rows[0])) {
       return res.status(400).json({
         message:
-          "Invalid CSV format — header row must include 'name' (optional: description, subCategories, isActive)",
+          "Invalid CSV format — header row must include 'name' (optional: description, gender, isActive)",
       });
     }
     if (rows.length > MAX_ROWS) {
@@ -493,7 +509,6 @@ export const bulkCreateCategories = async (req, res) => {
     const docs = [];
     const invalidRows = [];
     const duplicates = [];
-    let skipped = 0;
 
     rows.forEach((row, index) => {
       const rowNo = index + 2; // +2 → header ke baad 1-based row number
@@ -510,7 +525,6 @@ export const bulkCreateCategories = async (req, res) => {
 
       const lowerName = name.toLowerCase();
       if (existingNames.has(lowerName) || seenNames.has(lowerName)) {
-        skipped += 1;
         return fail("Category name already exists", true);
       }
 
@@ -518,32 +532,44 @@ export const bulkCreateCategories = async (req, res) => {
       if (!slug) return fail("Name se valid slug generate nahi ho paya");
 
       if (existingSlugs.has(slug) || seenSlugs.has(slug)) {
-        skipped += 1;
         return fail(`Slug '${slug}' already exists`, true);
       }
 
-      const subCategories = (row.subcategories || "")
+      // Template ka 'gender' column (purana 'subCategories' column bhi accept)
+      const genders = (row.gender ?? row.subcategories ?? "")
         .split(",")
         .map((s) => s.trim())
         .filter((s) => s === "Men" || s === "Women");
 
-      seenNames.add(lowerName);
-      seenSlugs.add(slug);
-      docs.push({
+      // Bulk categories top-level hoti hain — level/path pehle se set
+      const _id = new mongoose.Types.ObjectId();
+      const doc = {
+        _id,
         name,
         slug,
         description: (row.description || "").slice(0, 500),
-        subCategories: subCategories.length
-          ? [...new Set(subCategories)]
-          : ["Men", "Women"],
+        gender: genders.length ? [...new Set(genders)] : ["Men", "Women"],
         isActive: toBool(row.isactive, true),
         image: "", // Image baad me normal Edit se upload ho sakti hai
-      });
+        level: 0,
+        path: String(_id),
+      };
+
+      seenNames.add(lowerName);
+      seenSlugs.add(slug);
+      docs.push({ row: rowNo, name, doc });
     });
 
+    // Model rules (name 2-100 chars etc.) — insertMany ordered:false invalid
+    // docs chupchaap drop kar deta, isliye insert se pehle check karke report karo
+    const { validDocs, invalidRows: modelInvalidRows } =
+      await splitByModelValidation(Category, docs);
+    invalidRows.push(...modelInvalidRows);
+    invalidRows.sort((a, b) => a.row - b.row);
+
     let inserted = [];
-    if (docs.length) {
-      inserted = await Category.insertMany(docs, { ordered: false });
+    if (validDocs.length) {
+      inserted = await Category.insertMany(validDocs, { ordered: false });
     }
 
     return res.status(200).json({
@@ -559,5 +585,82 @@ export const bulkCreateCategories = async (req, res) => {
   } catch (error) {
     console.error("Bulk Create Categories Error:", error);
     return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   CHECK SLUG & NAME AVAILABILITY
+========================================================= */
+export const checkSlugAvailability = async (req, res) => {
+  try {
+    const { slug, name, excludeId } = req.query;
+
+    if (!slug && !name) {
+      return res.status(400).json({ message: "Slug or name is required" });
+    }
+
+    const baseFilter = {};
+    if (excludeId && mongoose.Types.ObjectId.isValid(excludeId)) {
+      baseFilter._id = { $ne: excludeId };
+    }
+
+    let nameTaken = false;
+    let slugTaken = false;
+
+    if (name && name.trim()) {
+      const existingName = await Category.findOne({
+        ...baseFilter,
+        name: { $regex: new RegExp(`^${escapeRegex(name.trim())}$`, "i") },
+      }).select("_id").lean();
+      if (existingName) nameTaken = true;
+    }
+
+    if (slug && slug.trim()) {
+      const existingSlug = await Category.findOne({
+        ...baseFilter,
+        slug: slug.trim().toLowerCase(),
+      }).select("_id").lean();
+      if (existingSlug) slugTaken = true;
+    }
+
+    const available = !nameTaken && !slugTaken;
+
+    return res.status(200).json({
+      available,
+      nameTaken,
+      slugTaken,
+    });
+  } catch (error) {
+    console.error("Check Slug Availability Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   TOGGLE CATEGORY STATUS (active <-> inactive)
+========================================================= */
+export const toggleCategoryStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid category ID" });
+    }
+
+    const category = await Category.findById(id);
+    if (!category) {
+      return res.status(404).json({ message: "Category not found" });
+    }
+
+    category.isActive = !category.isActive;
+    await category.save();
+
+    return res.status(200).json({
+      message: `Category ${category.isActive ? "activated" : "deactivated"} successfully`,
+      category,
+    });
+  } catch (error) {
+    console.error("Toggle Category Status Error:", error);
+    return res.status(500).json({ message: "Internal Server Error" });
   }
 };

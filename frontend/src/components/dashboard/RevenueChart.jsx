@@ -74,7 +74,7 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
         <div>
           <div className="flex items-center gap-2">
             <h2 className="admin-card-title text-[15px]">{title}</h2>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/60 text-[10.5px] font-bold flex items-center gap-1.5">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/90 dark:border-emerald-800/60 text-[10.5px] font-bold flex items-center gap-1.5 shadow-2xs">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Live Performance
             </span>
@@ -84,11 +84,11 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
           </p>
         </div>
         <div className="text-right">
-          <p className="text-[22px] font-extrabold text-(--ink) tracking-tight leading-none tabular-nums">
+          <p className="text-[22px] sm:text-[26px] font-extrabold text-slate-900 dark:text-white tracking-tight leading-none tabular-nums">
             {formatCurrency(total, { compact: true })}
           </p>
-          <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium mt-1.5">
-            Avg <b className="text-slate-700 dark:text-slate-300">{formatCurrency(avg, { compact: true })}</b>/day · Peak <b className="text-indigo-600 dark:text-indigo-400">{formatCurrency(peak, { compact: true })}</b>
+          <p className="text-[11.5px] text-slate-500 dark:text-slate-400 font-medium mt-1.5">
+            Avg <b className="text-slate-800 dark:text-slate-200">{formatCurrency(avg, { compact: true })}</b>/day · Peak <b className="text-indigo-600 dark:text-indigo-400 font-bold">{formatCurrency(peak, { compact: true })}</b>
           </p>
         </div>
       </div>
@@ -102,12 +102,12 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
         >
           <defs>
             <linearGradient id="revenueFillModern" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.28" />
-              <stop offset="65%" stopColor="#818cf8" stopOpacity="0.08" />
+              <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
+              <stop offset="65%" stopColor="#818cf8" stopOpacity="0.06" />
               <stop offset="100%" stopColor="#6366f1" stopOpacity="0.0" />
             </linearGradient>
             <filter id="smoothGlow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow dx="0" dy="2" stdDeviation="1.2" floodColor="#6366f1" floodOpacity="0.4" />
+              <feDropShadow dx="0" dy="2" stdDeviation="1.2" floodColor="#6366f1" floodOpacity="0.35" />
             </filter>
           </defs>
 
@@ -120,7 +120,7 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
               y1={VB_H * f}
               y2={VB_H * f}
               stroke="currentColor"
-              className="text-slate-200/80 dark:text-slate-800/80"
+              className="text-slate-200 dark:text-slate-800/80"
               strokeWidth="0.8"
               strokeDasharray="3 3"
               vectorEffect="non-scaling-stroke"
@@ -132,7 +132,7 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
             <path
               d={linePath}
               fill="none"
-              stroke="#6366f1"
+              className="stroke-indigo-600 dark:stroke-indigo-400"
               strokeWidth="2.4"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -146,7 +146,7 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
               x2={active.x}
               y1="0"
               y2={VB_H}
-              stroke="#818cf8"
+              className="stroke-indigo-400 dark:stroke-indigo-300"
               strokeWidth="1.2"
               strokeDasharray="2 2"
               vectorEffect="non-scaling-stroke"
@@ -175,7 +175,7 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
         {active && (
           <>
             <span
-              className="absolute w-3 h-3 rounded-full bg-indigo-600 dark:bg-indigo-400 ring-4 ring-indigo-300/40 dark:ring-indigo-500/40 pointer-events-none z-20 shadow-md transition-all duration-75"
+              className="absolute w-3 h-3 rounded-full bg-indigo-600 dark:bg-indigo-400 ring-4 ring-indigo-300/50 dark:ring-indigo-500/40 pointer-events-none z-20 shadow-md transition-all duration-75"
               style={{
                 left: `${active.x}%`,
                 top: `${(active.y / VB_H) * 100}%`,
@@ -183,7 +183,7 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
               }}
             />
             <div
-              className="absolute z-30 px-3 py-2 rounded-xl bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white text-[12px] whitespace-nowrap pointer-events-none shadow-xl border border-white/10"
+              className="absolute z-30 px-3 py-2 rounded-xl bg-slate-900/95 dark:bg-slate-800/95 backdrop-blur-md text-white text-[12px] whitespace-nowrap pointer-events-none shadow-xl border border-slate-700/60 dark:border-white/10"
               style={{
                 left: `${active.x}%`,
                 top: 0,
@@ -195,14 +195,14 @@ const RevenueChart = ({ data = [], title = "Revenue Analytics", subtitle }) => {
               <p className="font-bold text-indigo-300 dark:text-indigo-200">
                 {formatCurrency(active.value)}
               </p>
-              <p className="text-[10.5px] text-slate-400 mt-0.5 font-medium">{active.label}</p>
+              <p className="text-[10.5px] text-slate-300 mt-0.5 font-medium">{active.label}</p>
             </div>
           </>
         )}
       </div>
 
       {points.length > 1 && (
-        <div className="flex justify-between text-[11px] font-medium text-slate-400 dark:text-slate-500 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800/60">
+        <div className="flex justify-between text-[11px] font-medium text-slate-500 dark:text-slate-400 mt-3 pt-2.5 border-t border-slate-200/80 dark:border-slate-800/60">
           <span>{points[0].label}</span>
           <span>{points[Math.floor(points.length / 2)].label}</span>
           <span>{points[points.length - 1].label}</span>

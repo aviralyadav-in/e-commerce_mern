@@ -77,7 +77,18 @@ const reviewsSlice = createSlice({
           (r) => r._id === action.payload._id,
         );
         if (index !== -1) {
-          state.reviews[index] = action.payload;
+          state.reviews[index] = {
+            ...state.reviews[index],
+            ...action.payload,
+            user:
+              typeof action.payload.user === "object" && action.payload.user !== null
+                ? action.payload.user
+                : state.reviews[index].user,
+            product:
+              typeof action.payload.product === "object" && action.payload.product !== null
+                ? action.payload.product
+                : state.reviews[index].product,
+          };
         }
       })
       .addCase(updateReviewStatus.rejected, (state, action) => {

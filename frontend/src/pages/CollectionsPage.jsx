@@ -1,15 +1,23 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchCollections } from "../features/collections/collectionsSlice";
+import {
+  bulkCreateCollections,
+  fetchCollections,
+} from "../features/collections/collectionsSlice";
+import { exportAllCollectionsToExcel } from "../utils/exportProductToExcel";
+import { downloadCollectionsSampleCsv } from "../utils/csvTemplates";
+import { notifyInfo } from "../lib/toast";
 
 import CollectionTable from "../components/collections/CollectionTable";
 import CollectionModal from "../components/collections/CollectionModal";
+import CollectionProductsModal from "../components/collections/CollectionProductsModal";
 import PageHeader from "../components/common/PageHeader";
+import BulkUploadModal from "../components/common/BulkUploadModal";
 import SearchInput from "../components/common/SearchInput";
 import SegmentedFilter from "../components/common/SegmentedFilter";
 import ErrorBanner from "../components/common/ErrorBanner";
 import TableSkeleton from "../components/common/TableSkeleton";
-import { PlusIcon } from "../components/common/Icon";
+import { DownloadIcon, PlusIcon, UploadIcon } from "../components/common/Icon";
 
 const CollectionsPage = () => {
   const dispatch = useDispatch();
@@ -18,7 +26,9 @@ const CollectionsPage = () => {
   );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
   const [editData, setEditData] = useState(null);
+  const [viewingCollection, setViewingCollection] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(null);
 
@@ -27,7 +37,6 @@ const CollectionsPage = () => {
   }, [dispatch]);
 
   const activeCount = collections.filter((c) => c.isActive !== false).length;
-  const automatedCount = collections.filter((c) => c.type === "automated").length;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -64,11 +73,27 @@ const CollectionsPage = () => {
     setEditData(null);
   };
 
+  const handleExportAll = () => {
+    if (!collections.length) {
+      notifyInfo("Nothing to export", "Add a collection first.");
+      return;
+    }
+    exportAllCollectionsToExcel(collections);
+  };
+
+  const handleBulkUpload = async (formData) => {
+    const result = await dispatch(bulkCreateCollections(formData));
+    if (bulkCreateCollections.fulfilled.match(result)) {
+      return result.payload;
+    }
+    throw new Error(result.payload || "Bulk import failed");
+  };
+
   return (
     <div className="page-shell">
       <PageHeader
         title="Collections"
-        subtitle="Curate products for marketing — badges, home sections aur shop filters."
+        subtitle="Curate products for marketing campaigns, homepage showcases, and promotional badges."
         meta={
           <>
             <span className="meta-chip">
@@ -77,16 +102,30 @@ const CollectionsPage = () => {
             <span className="meta-chip meta-chip-success">
               <b>{activeCount}</b> active
             </span>
-            <span className="meta-chip">
-              <b>{automatedCount}</b> automated
-            </span>
           </>
         }
         actions={
-          <button onClick={handleOpenAdd} className="btn btn-primary">
-            <PlusIcon className="w-4 h-4" />
-            Add collection
-          </button>
+          <>
+            <button
+              onClick={handleExportAll}
+              title="Download all collections as Excel"
+              className="btn btn-export"
+            >
+              <DownloadIcon className="w-4 h-4" />
+              Export
+            </button>
+            <button
+              onClick={() => setIsBulkOpen(true)}
+              className="btn btn-secondary"
+            >
+              <UploadIcon className="w-4 h-4" />
+              Import CSV
+            </button>
+            <button onClick={handleOpenAdd} className="btn btn-primary">
+              <PlusIcon className="w-4 h-4" />
+              Add collection
+            </button>
+          </>
         }
       />
 
@@ -117,9 +156,9 @@ const CollectionsPage = () => {
       />
 
       {deleteLoading && (
-        <div className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-(--radius) bg-amber-50 border border-amber-200">
+        <div className="flex items-center gap-2.5 px-3 py-2.5 mb-3 rounded-(--radius) bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60">
           <span className="spinner spinner-sm" />
-          <p className="text-[12.5px] text-amber-800">
+          <p className="text-[12.5px] text-amber-800 dark:text-amber-300">
             Hiding the collection — its products are not affected.
           </p>
         </div>
@@ -132,6 +171,7 @@ const CollectionsPage = () => {
           collections={filtered}
           onEdit={handleOpenEdit}
           onCreate={handleOpenAdd}
+          onView={setViewingCollection}
         />
       )}
 
@@ -139,6 +179,29 @@ const CollectionsPage = () => {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         editData={editData}
+      />
+
+      <CollectionProductsModal
+        isOpen={!!viewingCollection}
+        collection={viewingCollection}
+        onClose={() => setViewingCollection(null)}
+      />
+
+      {/* CSV bulk import */}
+      <BulkUploadModal
+        isOpen={isBulkOpen}
+        onClose={() => setIsBulkOpen(false)}
+        title="Import collections via CSV"
+        subtitle="Upload a CSV file to add or update multiple collections at once."
+        uploadHint={
+          <>
+            Required column: <b>name</b>. Optional: <b>description</b>,
+            <b>showOnHomePage</b> (true/false), <b>showAsBadge</b> (true/false), <b>isActive</b> (true/false).
+            Slugs are auto-generated from the name. Existing duplicate names will be skipped automatically.
+          </>
+        }
+        onDownloadSample={downloadCollectionsSampleCsv}
+        onSubmit={handleBulkUpload}
       />
     </div>
   );

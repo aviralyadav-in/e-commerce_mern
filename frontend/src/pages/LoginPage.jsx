@@ -66,19 +66,19 @@ const LoginPage = () => {
       {/* Dynamic Ambient Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div
-          className="absolute -top-[20%] -left-[10%] w-[600px] h-[600px] rounded-full opacity-30 blur-[120px]"
+          className="absolute top-[-20%] left-[-10%] w-150 h-150 rounded-full opacity-30 blur-[120px]"
           style={{
             background: "radial-gradient(circle, #6366f1 0%, transparent 70%)",
           }}
         />
         <div
-          className="absolute -bottom-[20%] -right-[10%] w-[600px] h-[600px] rounded-full opacity-25 blur-[130px]"
+          className="absolute bottom-[-20%] right-[-10%] w-150 h-150 rounded-full opacity-25 blur-[130px]"
           style={{
             background: "radial-gradient(circle, #8b5cf6 0%, transparent 70%)",
           }}
         />
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[450px] h-[450px] rounded-full opacity-15 blur-[100px]"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-112.5 h-112.5 rounded-full opacity-15 blur-[100px]"
           style={{
             background: "radial-gradient(circle, #0ea5e9 0%, transparent 70%)",
           }}
@@ -94,21 +94,21 @@ const LoginPage = () => {
         />
       </div>
 
-      <div className="w-full max-w-[440px] relative z-10">
+      <div className="w-full max-w-110 relative z-10">
         {/* Main Glassmorphism Card */}
         <div className="relative rounded-3xl bg-slate-900/80 backdrop-blur-2xl border border-slate-800/90 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_40px_rgba(99,102,241,0.12)] p-7 sm:p-9 transition-all duration-300 ring-1 ring-white/10">
           {/* Subtle Top Glowing Border Accent */}
-          <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-indigo-500/60 to-transparent rounded-t-3xl" />
+          <div className="absolute inset-x-0 top-0 h-0.5 bg-linear-to-r from-transparent via-indigo-500/60 to-transparent rounded-t-3xl" />
 
           {/* Header & Branding */}
           <div className="flex items-center gap-4 mb-7">
-            <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-violet-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-600/30 ring-1 ring-white/25">
+            <div className="w-13 h-13 rounded-2xl bg-linear-to-tr from-indigo-600 via-indigo-500 to-violet-600 text-white flex items-center justify-center shrink-0 shadow-lg shadow-indigo-600/30 ring-1 ring-white/25">
               <BagIcon className="w-6.5 h-6.5" />
             </div>
             <div>
               <div className="flex items-center gap-2.5">
                 <h1 className="text-[22px] font-black tracking-tight text-white leading-none">
-                  Bag Store
+                  Niya Bags
                 </h1>
                 <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-950/80 text-indigo-300 border border-indigo-500/30 shadow-xs">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -158,7 +158,7 @@ const LoginPage = () => {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@bagstore.com"
+                  placeholder="admin@niyabags.com"
                   className="w-full pl-10.5 pr-4 py-3 bg-slate-950/70 border border-slate-800 rounded-xl text-[14px] text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/30 transition-all duration-200 shadow-inner"
                 />
               </div>
@@ -204,7 +204,7 @@ const LoginPage = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 py-3.5 px-5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] text-white font-bold text-[14px] tracking-wide shadow-lg shadow-indigo-600/35 hover:shadow-indigo-600/50 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full mt-2 py-3.5 px-5 rounded-xl bg-linear-to-r from-indigo-600 via-indigo-500 to-violet-600 hover:from-indigo-500 hover:to-violet-500 active:scale-[0.99] text-white font-bold text-[14px] tracking-wide shadow-lg shadow-indigo-600/35 hover:shadow-indigo-600/50 transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <>
@@ -221,7 +221,7 @@ const LoginPage = () => {
         {/* Security / System Footer Note */}
         <div className="flex items-center justify-center gap-2 text-[12px] text-slate-400 font-medium mt-6">
           <ShieldCheckIcon className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>Protected Enterprise Session · Bag Store Cloud</span>
+          <span>Protected Enterprise Session · Niya Bags Cloud</span>
         </div>
       </div>
     </div>

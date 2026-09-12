@@ -66,6 +66,21 @@ export const deleteBanner = createAsyncThunk(
   },
 );
 
+// 5. 🆕 Toggle Banner Status
+export const toggleBannerStatus = createAsyncThunk(
+  "banners/toggleStatus",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await API.patch(`/banners/${id}/toggle-status`);
+      return response.data.banner;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Error updating banner status",
+      );
+    }
+  },
+);
+
 const bannersSlice = createSlice({
   name: "banners",
   initialState: {
@@ -138,6 +153,19 @@ const bannersSlice = createSlice({
       })
       .addCase(deleteBanner.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+
+      // Toggle Status
+      .addCase(toggleBannerStatus.fulfilled, (state, action) => {
+        const index = state.banners.findIndex(
+          (b) => b._id === action.payload._id,
+        );
+        if (index !== -1) {
+          state.banners[index].isActive = action.payload.isActive;
+        }
+      })
+      .addCase(toggleBannerStatus.rejected, (state, action) => {
         state.error = action.payload;
       });
   },

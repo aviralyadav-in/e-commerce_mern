@@ -22,7 +22,8 @@ authRouter.post("/login", login);
 authRouter.post("/admin/login", adminLogin);
 authRouter.get("/admin/me", adminRoute, getAdminMe);
 authRouter.post("/admin/logout", adminLogout);
-authRouter.post("/logout", protectedRoute, logout);
+// Public — expired/invalid token par bhi cookie clear ho sake
+authRouter.post("/logout", logout);
 authRouter.get("/profile", protectedRoute, getProfile);
 // 🛠️ REST standard: partial update ke liye PATCH. Controller already
 // partial-update semantics implement karta hai (sirf bheji hui fields

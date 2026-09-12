@@ -10,12 +10,12 @@ import { fetchCategories } from "../features/categories/categoriesSlice";
 import { fetchCollections } from "../features/collections/collectionsSlice";
 import { exportAllProductsToExcel } from "../utils/exportProductToExcel";
 import { downloadProductsSampleCsv } from "../utils/csvTemplates";
-import { notifyInfo } from "../lib/toast";
+import { notifyError, notifyInfo, notifySuccess } from "../lib/toast";
 
 import PageHeader from "../components/common/PageHeader";
 import ProductTable from "../components/products/ProductTable";
+import BulkCollectionPicker from "../components/products/BulkCollectionPicker";
 import ProductModal from "../components/products/ProductModal";
-import BulkProductDrawer from "../components/products/BulkProductDrawer";
 import BulkUploadModal from "../components/common/BulkUploadModal";
 import SearchInput from "../components/common/SearchInput";
 import SegmentedFilter from "../components/common/SegmentedFilter";
@@ -24,7 +24,6 @@ import TableSkeleton from "../components/common/TableSkeleton";
 import { formatCurrency } from "../utils/format";
 import {
   DownloadIcon,
-  LayersIcon,
   PlusIcon,
   UploadIcon,
 } from "../components/common/Icon";
@@ -42,12 +41,14 @@ const ProductsPage = () => {
   const { collections } = useSelector((state) => state.collections);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isBulkOpen, setIsBulkOpen] = useState(false);
   // 🆕 CSV import — target category + refresh trigger
   const [isCsvOpen, setIsCsvOpen] = useState(false);
   const [csvCategoryId, setCsvCategoryId] = useState("");
   const [csvRefreshKey, setCsvRefreshKey] = useState(0);
   const [editData, setEditData] = useState(null);
+  // 🆕 Bulk selection — checkbox selection (bulk action bar + picker)
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [stockFilter, setStockFilter] = useState(null);
@@ -118,6 +119,35 @@ const ProductsPage = () => {
     });
   }, [products, stockFilter]);
 
+  // 🆕 Bulk selection handlers — checkbox toggle + tri-state select-all
+  const toggleRowSelection = (prod) => {
+    const id = String(prod._id);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // Select-all sirf current page ki rows par chalta hai
+  const toggleSelectAll = (pageProducts) => {
+    const allSelected = pageProducts.every((p) =>
+      selectedIds.has(String(p._id)),
+    );
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      pageProducts.forEach((p) => {
+        const id = String(p._id);
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
   const handleExportAll = () => {
     if (!products.length) {
       notifyInfo("Nothing to export", "No products match this view.");
@@ -180,13 +210,6 @@ const ProductsPage = () => {
               Export
             </button>
             <button
-              onClick={() => setIsBulkOpen(true)}
-              className="btn btn-secondary"
-            >
-              <LayersIcon className="w-4 h-4" />
-              Bulk add
-            </button>
-            <button
               onClick={() => setIsCsvOpen(true)}
               className="btn btn-secondary"
             >
@@ -247,6 +270,9 @@ const ProductsPage = () => {
         <ProductTable
           products={list}
           onCreate={openAdd}
+          selectedIds={selectedIds}
+          onToggleSelect={toggleRowSelection}
+          onToggleSelectAll={toggleSelectAll}
           onEdit={(p) => {
             setEditData(p);
             setIsModalOpen(true);
@@ -263,32 +289,24 @@ const ProductsPage = () => {
         editData={editData}
       />
 
-      {/* Conditional render — har baar fresh state ke saath mount hota hai */}
-      {isBulkOpen && (
-        <BulkProductDrawer
-          isOpen
-          onClose={() => setIsBulkOpen(false)}
-        />
-      )}
-
       {/* 🆕 CSV bulk import — Category Dropdown Method */}
       <BulkUploadModal
         isOpen={isCsvOpen}
         onClose={closeCsvModal}
         title="Import products via CSV"
-        subtitle="Category chuno, CSV upload karo — saare products usi me chale jaayenge."
+        subtitle="Select a target category and upload your CSV spreadsheet. Products will be automatically imported and assigned."
         uploadHint={
           <>
             Required columns: <b>name, description, price, stock, images</b>{" "}
-            (images = comma-separated URLs). Optional: brand, subCategory,
-            discountPrice, sku (khali = auto-generate), category_name
-            (dropdown override), isActive. Slug auto-generate hota hai.
+            (comma-separated URLs). Optional: brand, gender, discountPrice, sku
+            (auto-generated if left blank), category_name (overrides dropdown
+            selection), isActive. Product slugs are automatically generated.
           </>
         }
         onDownloadSample={downloadProductsSampleCsv}
         onSubmit={handleCsvUpload}
         isSubmitDisabled={!csvCategoryId}
-        submitDisabledReason="Pehle target category select karein"
+        submitDisabledReason="Please select a target category above before importing"
         extraFields={
           <div>
             <label className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.07em] text-(--ink-faint)">
@@ -309,6 +327,39 @@ const ProductsPage = () => {
             </select>
           </div>
         }
+      />
+
+      {/* 🆕 BULK ACTION BAR — floating bottom (Shopify-style), selection
+          empty hone par apne aap hide */}
+      {selectedIds.size > 0 && (
+        <div className="bulk-bar" role="toolbar" aria-label="Bulk actions">
+          <span className="badge badge-brand">
+            ✓ {selectedIds.size} product{selectedIds.size === 1 ? "" : "s"}{" "}
+            selected
+          </span>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => setIsPickerOpen(true)}
+          >
+            Add to Collection
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={clearSelection}
+          >
+            ✕ Clear
+          </button>
+        </div>
+      )}
+
+      {/* 🆕 Collection picker — selected products bulk add */}
+      <BulkCollectionPicker
+        isOpen={isPickerOpen}
+        onClose={() => setIsPickerOpen(false)}
+        selectedIds={selectedIds}
+        onDone={clearSelection}
       />
     </div>
   );

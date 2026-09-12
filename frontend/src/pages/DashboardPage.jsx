@@ -182,40 +182,39 @@ const DashboardPage = () => {
   return (
     <div className="page-shell space-y-6">
       {/* Welcome Hero Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-7 text-white shadow-xl shadow-slate-900/10 border border-slate-800">
-        <div className="absolute -right-10 -top-10 w-72 h-72 rounded-full bg-indigo-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute right-1/3 -bottom-10 w-60 h-60 rounded-full bg-purple-500/15 blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-2xl bg-linear-to-r from-white via-indigo-50/40 to-slate-50 dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 p-6 sm:p-7 shadow-sm dark:shadow-xl dark:shadow-slate-900/20 border border-slate-200/90 dark:border-slate-800 transition-colors">
+        <div className="absolute -right-10 -top-10 w-72 h-72 rounded-full bg-indigo-500/10 dark:bg-indigo-500/20 blur-3xl pointer-events-none" />
+        <div className="absolute right-1/3 -bottom-10 w-60 h-60 rounded-full bg-purple-500/8 dark:bg-purple-500/15 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
           <div>
             <div className="flex items-center gap-2.5 mb-1.5">
-              <span className="px-2.5 py-0.5 rounded-full bg-indigo-500/30 text-indigo-300 border border-indigo-500/40 text-[11px] font-bold tracking-wide">
+              <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-500/30 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-500/40 text-[11px] font-bold tracking-wide">
                 STORE OVERVIEW
               </span>
-              <span className="text-[12px] text-slate-400 font-medium">
+              <span className="text-[12px] text-slate-500 dark:text-slate-400 font-medium">
                 {todayLabel}
               </span>
             </div>
-            <h1 className="text-[22px] sm:text-[26px] font-extrabold tracking-tight text-white">
+            <h1 className="text-[22px] sm:text-[26px] font-black tracking-tight text-slate-900 dark:text-white">
               Welcome back, Admin 👋
             </h1>
-            <p className="text-[13px] text-slate-300 mt-1 max-w-xl">
-              Here is your real-time store performance, sales momentum, and
-              inventory health for today.
+            <p className="text-[13px] text-slate-600 dark:text-slate-300 mt-1 max-w-xl font-normal">
+              Here is your real-time store performance, sales momentum, and inventory health for today.
             </p>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
             <Link
               to="/products"
-              className="btn bg-white/10 hover:bg-white/20 text-white border border-white/15 backdrop-blur-sm transition-all"
+              className="btn btn-secondary hover:border-indigo-300 shadow-2xs font-semibold"
             >
-              <PackageIcon className="w-4 h-4 text-indigo-300" />
+              <PackageIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Manage Products</span>
             </Link>
             <Link
               to="/orders"
-              className="btn btn-primary shadow-lg shadow-indigo-500/30"
+              className="btn btn-primary shadow-md shadow-indigo-500/25 dark:shadow-indigo-500/30"
             >
               <BagIcon className="w-4 h-4 text-white" />
               <span>View All Orders</span>
@@ -271,7 +270,7 @@ const DashboardPage = () => {
         {/* Order Pipeline Widget */}
         <div className="admin-card p-5 xl:col-span-4 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/80 dark:border-slate-800/60">
               <div>
                 <h2 className="admin-card-title text-[15px]">Order Pipeline</h2>
                 <p className="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">
@@ -284,7 +283,7 @@ const DashboardPage = () => {
             </div>
 
             {orders.length ? (
-              <div className="space-y-3 mt-3">
+              <div className="space-y-3.5 mt-3">
                 {Object.entries(stats.statusCounts).map(([status, count]) => {
                   const pct = orders.length
                     ? Math.round((count / orders.length) * 100)
@@ -294,21 +293,21 @@ const DashboardPage = () => {
                       <div className="flex justify-between items-center text-[12.5px] mb-1.5 font-medium">
                         <span className="text-slate-700 dark:text-slate-200 flex items-center gap-2">
                           <span
-                            className="w-2 h-2 rounded-full ring-2 ring-white/10"
+                            className="w-2.5 h-2.5 rounded-full ring-2 ring-slate-200/90 dark:ring-white/10"
                             style={{ background: STATUS_BAR[status] }}
                           />
                           <span className="font-semibold">{status}</span>
                         </span>
-                        <span className="text-slate-600 dark:text-slate-300 tabular-nums font-bold text-[12px]">
+                        <span className="text-slate-700 dark:text-slate-300 tabular-nums font-bold text-[12px]">
                           {count}{" "}
-                          <span className="font-medium text-slate-400 dark:text-slate-500">
+                          <span className="font-medium text-slate-500 dark:text-slate-400">
                             ({pct}%)
                           </span>
                         </span>
                       </div>
-                      <div className="h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800/80 overflow-hidden">
+                      <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800/80 overflow-hidden ring-1 ring-slate-200/60 dark:ring-transparent">
                         <div
-                          className="h-full rounded-full transition-all duration-500"
+                          className="h-full rounded-full transition-all duration-500 shadow-2xs"
                           style={{
                             width: `${pct}%`,
                             background: STATUS_BAR[status],
@@ -326,10 +325,10 @@ const DashboardPage = () => {
             )}
           </div>
 
-          <div className="pt-4 mt-5 border-t border-slate-100 dark:border-slate-800/60 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
+          <div className="pt-4 mt-5 border-t border-slate-200/80 dark:border-slate-800/60 flex items-center justify-between text-[12px] text-slate-500 dark:text-slate-400">
             <span>
               Active Volume:{" "}
-              <b className="text-slate-800 dark:text-slate-200">
+              <b className="text-slate-900 dark:text-slate-200 font-bold">
                 {stats.openOrders} orders
               </b>
             </span>
@@ -347,12 +346,12 @@ const DashboardPage = () => {
           <div className="admin-card-header">
             <div>
               <h2 className="admin-card-title">Inventory Alerts</h2>
-              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">
+              <p className="text-[11.5px] text-slate-500 dark:text-slate-400 font-medium">
                 Products requiring replenishment
               </p>
             </div>
-            <Link to="/products" className="admin-link">
-              All Products
+            <Link to="/inventory" className="admin-link">
+              Manage Inventory →
             </Link>
           </div>
           {lowStock.length > 0 ? (
@@ -369,10 +368,10 @@ const DashboardPage = () => {
                   {lowStock.map((product) => (
                     <tr
                       key={product._id}
-                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       <td className="max-w-50">
-                        <span className="cell-strong block truncate text-[13px]">
+                        <span className="cell-strong block truncate text-[13px] text-slate-800 dark:text-slate-100 font-semibold">
                           {product.name}
                         </span>
                       </td>
@@ -415,7 +414,7 @@ const DashboardPage = () => {
           <div className="admin-card-header">
             <div>
               <h2 className="admin-card-title">Recent Transactions</h2>
-              <p className="text-[11.5px] text-slate-400 dark:text-slate-500 font-medium">
+              <p className="text-[11.5px] text-slate-500 dark:text-slate-400 font-medium">
                 Latest incoming customer orders
               </p>
             </div>
@@ -439,34 +438,34 @@ const DashboardPage = () => {
                   {recentOrders.map((order) => (
                     <tr
                       key={order._id}
-                      className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors"
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
                     >
                       <td>
                         <Link
                           to="/orders"
-                          className="font-mono text-[12px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline"
+                          className="font-mono text-[12px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 hover:underline"
                         >
                           {shortId(order._id)}
                         </Link>
                       </td>
                       <td className="max-w-40">
                         <div className="flex items-center gap-2.5">
-                          <div className="w-7 h-7 rounded-full bg-linear-to-tr from-indigo-500 to-violet-600 text-white text-[10.5px] font-bold flex items-center justify-center shrink-0 shadow-xs">
+                          <div className="w-7 h-7 rounded-full bg-linear-to-tr from-indigo-600 to-violet-600 text-white text-[10.5px] font-bold flex items-center justify-center shrink-0 shadow-xs">
                             {typeof order.user === "object" && order.user?.name
                               ? order.user.name.charAt(0).toUpperCase()
                               : "C"}
                           </div>
-                          <span className="cell-strong block truncate text-[12.5px]">
+                          <span className="cell-strong block truncate text-[12.5px] text-slate-800 dark:text-slate-100 font-semibold">
                             {typeof order.user === "object"
                               ? order.user?.name || "Customer"
                               : "Customer"}
                           </span>
                         </div>
                       </td>
-                      <td className="text-slate-500 dark:text-slate-400 text-[12px] whitespace-nowrap">
+                      <td className="text-slate-500 dark:text-slate-400 text-[12px] whitespace-nowrap font-medium">
                         {formatDate(order.createdAt || order.orderDate)}
                       </td>
-                      <td className="text-right font-bold text-(--ink) tabular-nums text-[13px]">
+                      <td className="text-right font-extrabold text-slate-900 dark:text-white tabular-nums text-[13px]">
                         {formatCurrency(order.totalAmount)}
                       </td>
                       <td>

@@ -3,9 +3,14 @@ import { Product } from "../models/product.model.js";
 import { Address } from "../models/address.model.js";
 import { Coupon } from "../models/coupon.model.js";
 import { Cart } from "../models/cart.model.js";
+import { Settings } from "../models/settings.model.js";
 import { z } from "zod";
-// 🆕 Selling price + coupon refund helpers
-import { unitPrice, decrementCouponUsage } from "../utils/commerce.js";
+// 🆕 Selling price + coupon refund + currency rounding helpers
+import {
+  unitPrice,
+  decrementCouponUsage,
+  roundCurrency,
+} from "../utils/commerce.js";
 
 // MongoDB ObjectId validator
 const objectIdValidation = z
@@ -36,7 +41,9 @@ const createOrderRequestSchema = z.object({
   couponCode: z.string().optional(),
 });
 
-// Storefront (utils/shipping.js + OrderBreakdown) ke saath identical shipping rules
+// Settings document na mile tab ke fallback. Rule (admin Settings page jaisa):
+// discount ke baad cart value threshold se KAM ho tabhi shipping fee — barabar
+// ya zyada par free shipping.
 const FREE_SHIP_THRESHOLD = 500;
 const SHIPPING_FEE = 50;
 
@@ -169,9 +176,9 @@ export const createOrder = async (req, res) => {
       }
 
       if (coupon.discountType === "percentage") {
-        discountAmount = (itemsPrice * coupon.discountValue) / 100;
+        discountAmount = roundCurrency((itemsPrice * coupon.discountValue) / 100);
       } else if (coupon.discountType === "flat") {
-        discountAmount = coupon.discountValue;
+        discountAmount = roundCurrency(coupon.discountValue);
       }
 
       // Discount kabhi items ke total se zyada nahi ho sakta
@@ -180,14 +187,35 @@ export const createOrder = async (req, res) => {
       appliedCoupon = coupon;
     }
 
-    // 4. Shipping — storefront CartSummary jaisa hi (discounted amount par based)
-    const afterDiscount = Math.max(0, itemsPrice - discountAmount);
-    const shippingPrice =
-      itemsPrice > 0 && afterDiscount <= FREE_SHIP_THRESHOLD
-        ? SHIPPING_FEE
+    // 4. Shipping & Payment Rules — Dynamic settings
+    const storeSettings = await Settings.getSingleton();
+
+    if (paymentMethod === "COD" && storeSettings?.codEnabled === false) {
+      return res.status(400).json({
+        message:
+          "Cash on Delivery (COD) is currently disabled by store management. Please select UPI or Card payment.",
+      });
+    }
+
+    const freeThreshold = storeSettings?.freeShippingThreshold ?? FREE_SHIP_THRESHOLD;
+    const dynamicShippingFee = storeSettings?.shippingFee ?? SHIPPING_FEE;
+    const codConvenienceFee =
+      paymentMethod === "COD" && (storeSettings?.codFee || 0) > 0
+        ? Number(storeSettings.codFee)
         : 0;
 
-    const totalAmount = Math.max(0, afterDiscount + shippingPrice);
+    itemsPrice = roundCurrency(itemsPrice);
+    discountAmount = roundCurrency(discountAmount);
+
+    const afterDiscount = Math.max(0, itemsPrice - discountAmount);
+    const shippingPrice =
+      itemsPrice > 0 && afterDiscount < freeThreshold
+        ? dynamicShippingFee
+        : 0;
+
+    const totalAmount = roundCurrency(
+      Math.max(0, afterDiscount + shippingPrice + codConvenienceFee),
+    );
 
     // 5. 🆕 FIX (Oversell race condition): Atomic stock decrement —
     // order banane se PEHLE. Pehle "check + alag se $inc" hota tha, do
@@ -198,7 +226,7 @@ export const createOrder = async (req, res) => {
       const updated = await Product.findOneAndUpdate(
         { _id: item.product, stock: { $gte: item.quantity } },
         { $inc: { stock: -item.quantity } },
-        { new: true },
+        { returnDocument: "after" },
       );
 
       if (!updated) {
@@ -225,6 +253,7 @@ export const createOrder = async (req, res) => {
         orderItems: finalOrderItems,
         itemsPrice,
         shippingPrice,
+        codFee: codConvenienceFee,
         couponCode: appliedCouponCode,
         discountAmount,
         totalAmount,
@@ -310,6 +339,13 @@ export const myOrders = async (req, res) => {
 ========================================================= */
 export const getOrderById = async (req, res) => {
   try {
+    const { id } = req.params;
+
+    // 🛠️ Invalid ObjectId → 400 (mongoose cast 500 nahi)
+    if (!objectIdValidation.safeParse(id).success) {
+      return res.status(400).json({ message: "Invalid order ID" });
+    }
+
     const order = await Order.findById(req.params.id)
       .populate("user", "name email")
       .populate("orderItems.product", "name images price")
@@ -351,7 +387,11 @@ export const getAllOrders = async (req, res) => {
   try {
     const orders = await Order.find()
       .populate("user", "name email")
-      .populate("shippingAddress", "city state")
+      .populate(
+        "shippingAddress",
+        "firstName lastName fullName phone addressLine1 city state zipCode",
+      )
+      .populate("orderItems.product", "name images price")
       .sort({ createdAt: -1 });
 
     // Admin dashboard ke liye total sales ka calculate karna
@@ -384,6 +424,13 @@ export const getAllOrders = async (req, res) => {
 ========================================================= */
 export const updateOrderStatus = async (req, res) => {
   try {
+    const { id } = req.params;
+
+    // 🛠️ Invalid ObjectId → 400
+    if (!objectIdValidation.safeParse(id).success) {
+      return res.status(400).json({ message: "Invalid order ID" });
+    }
+
     const { orderStatus, paymentStatus, transactionId } = req.body;
     const order = await Order.findById(req.params.id);
 
@@ -391,10 +438,51 @@ export const updateOrderStatus = async (req, res) => {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    if (order.orderStatus === "Delivered") {
+    // 🛠️ Invalid status values → 400 + clear message (schema enum fail hone
+    // par pehle 500 jaata tha)
+    const VALID_ORDER_STATUSES = [
+      "Pending",
+      "Processing",
+      "Shipped",
+      "Delivered",
+      "Cancelled",
+    ];
+    const VALID_PAYMENT_STATUSES = [
+      "Pending",
+      "Completed",
+      "Failed",
+      "Refunded",
+    ];
+
+    if (orderStatus && !VALID_ORDER_STATUSES.includes(orderStatus)) {
+      return res.status(400).json({
+        message: `Order status must be one of: ${VALID_ORDER_STATUSES.join(", ")}`,
+      });
+    }
+    if (paymentStatus && !VALID_PAYMENT_STATUSES.includes(paymentStatus)) {
+      return res.status(400).json({
+        message: `Payment status must be one of: ${VALID_PAYMENT_STATUSES.join(", ")}`,
+      });
+    }
+
+    if (
+      orderStatus &&
+      orderStatus !== "Delivered" &&
+      order.orderStatus === "Delivered"
+    ) {
       return res
         .status(400)
         .json({ message: "You have already delivered this order" });
+    }
+
+    if (
+      orderStatus &&
+      orderStatus !== "Cancelled" &&
+      order.orderStatus === "Cancelled"
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Cannot change status of a cancelled order" });
     }
 
     // FIX: Pehle ka status yaad rakho (cancel par sirf EK baar stock restore ho)
@@ -403,9 +491,9 @@ export const updateOrderStatus = async (req, res) => {
     // Update Statuses
     if (orderStatus) {
       order.orderStatus = orderStatus;
-      // Agar deliver ho gaya toh time note kar lo
+      // Agar deliver ho gaya toh time note kar lo (existing time preserve karo)
       if (orderStatus === "Delivered") {
-        order.deliveredAt = Date.now();
+        if (!order.deliveredAt) order.deliveredAt = Date.now();
         order.paymentStatus = "Completed"; // COD orders ke liye
       }
     }
@@ -442,9 +530,16 @@ export const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
+    // 🛠️ Return fully populated order so Redux doesn't overwrite populated
+    // customer/address/product fields with raw ObjectIds
+    const populatedOrder = await Order.findById(order._id)
+      .populate("user", "name email")
+      .populate("shippingAddress")
+      .populate("orderItems.product", "name images price");
+
     return res.status(200).json({
       message: "Order status updated successfully",
-      order,
+      order: populatedOrder || order,
     });
   } catch (error) {
     console.error("Update Order Status Error:", error);

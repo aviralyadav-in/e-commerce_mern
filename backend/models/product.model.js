@@ -34,18 +34,18 @@ const productSchema = new mongoose.Schema(
       default: "",
     },
 
-    // Men / Women under parent category - multi-select array
+    // Men / Women (gender) under parent category - multi-select array
     // (ek product Men + Women dono ke liye ho sakta hai)
-    subCategory: {
+    gender: {
       type: [String],
       enum: {
         values: ["Men", "Women"],
-        message: "Sub-category must be Men or Women",
+        message: "Gender must be Men or Women",
       },
       default: ["Men"],
       validate: {
         validator: (val) => Array.isArray(val) && val.length > 0,
-        message: "Select at least one sub-category (Men or Women).",
+        message: "Select at least one gender (Men or Women).",
       },
     },
 

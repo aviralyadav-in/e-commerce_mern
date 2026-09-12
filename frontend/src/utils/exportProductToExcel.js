@@ -28,7 +28,9 @@ const productToRow = (product, categoryName) => ({
   Slug: product.slug || "",
   Description: product.description || "",
   Category: categoryName || getCategoryName(product),
-  "Sub Category": product.subCategory || "",
+  Gender: Array.isArray(product.gender ?? product.subCategory)
+    ? (product.gender ?? product.subCategory).join(", ")
+    : (product.gender ?? product.subCategory) || "",
   Brand: product.brand || "",
   SKU: product.sku || "",
   Price: product.price ?? "",
@@ -85,8 +87,8 @@ export const exportAllCategoriesToExcel = (categories = []) => {
     Name: cat.name || "",
     Slug: cat.slug || "",
     Description: cat.description || "",
-    "Sub Categories": Array.isArray(cat.subCategories)
-      ? cat.subCategories.join(", ")
+    Gender: Array.isArray(cat.gender ?? cat.subCategories)
+      ? (cat.gender ?? cat.subCategories).join(", ")
       : "",
     Status: cat.isActive ? "Active" : "Inactive",
     Image: cat.image ? getAssetUrl(cat.image) : "",
@@ -101,6 +103,26 @@ export const exportAllCategoriesToExcel = (categories = []) => {
   const stamp = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(workbook, `all-categories-${stamp}.xlsx`);
   return true;
+};
+
+export const exportAllCollectionsToExcel = (collections = []) => {
+  if (!collections.length) return false;
+
+  const rows = collections.map((col) => ({
+    "Collection ID": col._id || "",
+    Name: col.name || "",
+    Slug: col.slug || "",
+    Description: col.description || "",
+    "Home Featured": col.showOnHomePage ? "Yes" : "No",
+    "Badge on Cards": col.showAsBadge ? "Yes" : "No",
+    "Products Count": col.productCount ?? 0,
+    Status: col.isActive !== false ? "Active" : "Hidden",
+    Image: col.image ? getAssetUrl(col.image) : "",
+    "Created At": formatDate(col.createdAt),
+    "Updated At": formatDate(col.updatedAt),
+  }));
+
+  return writeRowsToExcel(rows, "All Collections", "all-collections");
 };
 
 const writeRowsToExcel = (rows, sheetName, filePrefix) => {
@@ -121,24 +143,30 @@ const resolveCustomerName = (user, getCustomerNameFn) => {
   return "Unknown Customer";
 };
 
-export const exportAllUsersToExcel = (users = []) => {
-  const rows = users.map((user) => ({
-    "User ID": user._id || "",
-    Name: user.name || "",
-    Email: user.email || "",
-    Phone: user.phone || "",
-    Gender:
-      user.gender === "female"
-        ? "Female"
-        : user.gender === "male"
-          ? "Male"
+export const exportAllUsersToExcel = (users = [], customerMetrics = {}) => {
+  const rows = users.map((user) => {
+    const metrics = customerMetrics[user._id] || { ordersCount: 0, totalSpend: 0 };
+    return {
+      "User ID": user._id || "",
+      Name: user.name || "",
+      Email: user.email || "",
+      Phone: user.phone || "",
+      "Total Orders": metrics.ordersCount || 0,
+      "Lifetime Spend (₹)": metrics.totalSpend || 0,
+      Gender:
+        user.gender === "female"
+          ? "Female"
+          : user.gender === "male"
+            ? "Male"
+            : "",
+      "Date of Birth":
+        user.dateOfBirth && !isNaN(new Date(user.dateOfBirth).getTime())
+          ? new Date(user.dateOfBirth).toLocaleDateString("en-IN")
           : "",
-    "Date of Birth": user.dateOfBirth
-      ? new Date(user.dateOfBirth).toLocaleDateString("en-IN")
-      : "",
-    "Joined At": formatDate(user.createdAt),
-    "Updated At": formatDate(user.updatedAt),
-  }));
+      "Joined At": formatDate(user.createdAt),
+      "Updated At": formatDate(user.updatedAt),
+    };
+  });
   return writeRowsToExcel(rows, "All Users", "all-users");
 };
 
@@ -162,10 +190,22 @@ export const exportAllOrdersToExcel = (orders = [], getCustomerNameFn) => {
       "Order ID": order._id || "",
       "Customer Name": resolveCustomerName(order.user, getCustomerNameFn),
       "Customer ID": customerId || "",
+      "Customer Phone": order.shippingAddress?.phone || "",
+      "Shipping Address":
+        [
+          order.shippingAddress?.addressLine1,
+          order.shippingAddress?.addressLine2,
+        ]
+          .filter(Boolean)
+          .join(", ") || "",
+      "Shipping City": order.shippingAddress?.city || "",
+      "Shipping State": order.shippingAddress?.state || "",
+      Pincode: order.shippingAddress?.zipCode || "",
       "Items Count": order.orderItems?.length || 0,
       Items: itemsSummary,
       "Items Price": order.itemsPrice ?? "",
       "Shipping Price": order.shippingPrice ?? "",
+      "COD Fee": order.codFee ?? 0,
       "Coupon Code": order.couponCode || "",
       "Discount Amount": order.discountAmount ?? 0,
       "Total Amount": order.totalAmount ?? 0,
@@ -182,23 +222,38 @@ export const exportAllOrdersToExcel = (orders = [], getCustomerNameFn) => {
 };
 
 export const exportAllCouponsToExcel = (coupons = []) => {
-  const rows = coupons.map((coupon) => ({
-    "Coupon ID": coupon._id || "",
-    Code: coupon.code || "",
-    "Discount Type": coupon.discountType || "",
-    "Discount Value": coupon.discountValue ?? "",
-    "Min Order Value": coupon.minOrderValue ?? 0,
-    "Expiry Date": coupon.expiryDate
-      ? new Date(coupon.expiryDate).toLocaleDateString("en-IN")
-      : "",
-    Status: coupon.isActive ? "Active" : "Inactive",
-    Expired:
-      coupon.expiryDate && new Date(coupon.expiryDate) < new Date()
-        ? "Yes"
-        : "No",
-    "Created At": formatDate(coupon.createdAt),
-    "Updated At": formatDate(coupon.updatedAt),
-  }));
+  const rows = coupons.map((coupon) => {
+    const isExp =
+      coupon.expiryDate && new Date(coupon.expiryDate) < new Date();
+    const isExh =
+      coupon.usageLimit != null &&
+      (coupon.usedCount || 0) >= coupon.usageLimit;
+    const state = isExp
+      ? "Expired"
+      : isExh
+        ? "Exhausted"
+        : coupon.isActive
+          ? "Active"
+          : "Paused";
+
+    return {
+      "Coupon ID": coupon._id || "",
+      Code: coupon.code || "",
+      "Discount Type": coupon.discountType || "",
+      "Discount Value": coupon.discountValue ?? "",
+      "Min Order Value": coupon.minOrderValue ?? 0,
+      "Used Count": coupon.usedCount || 0,
+      "Usage Limit": coupon.usageLimit ?? "Unlimited",
+      "Per-User Limit": coupon.perUserLimit ?? "Unlimited",
+      "Expiry Date": coupon.expiryDate
+        ? new Date(coupon.expiryDate).toLocaleDateString("en-IN")
+        : "No expiry",
+      Status: coupon.isActive ? "Active" : "Paused",
+      State: state,
+      "Created At": formatDate(coupon.createdAt),
+      "Updated At": formatDate(coupon.updatedAt),
+    };
+  });
   return writeRowsToExcel(rows, "All Coupons", "all-coupons");
 };
 
@@ -208,6 +263,8 @@ export const exportAllBannersToExcel = (banners = []) => {
     Title: banner.title || "",
     Subtitle: banner.subtitle || "",
     "Link URL": banner.linkUrl || "",
+    Page: banner.page ? banner.page.toUpperCase() : "HOME",
+    Position: banner.position || "after-hero",
     "Sort Order": banner.sortOrder ?? 0,
     Status: banner.isActive ? "Active" : "Inactive",
     Image: banner.image ? getAssetUrl(banner.image) : "",
@@ -223,9 +280,11 @@ export const exportAllWishlistsToExcel = (wishlists = []) => {
     "Entry ID": item._id || "",
     "Customer Name": item.userName || "",
     "Customer Email": item.userEmail || "",
+    "Customer Phone": item.userPhone || "",
     "Product Name": item.productName || "",
     "Product Price": item.productPrice ?? "",
     "Discount Price": item.productDiscountPrice ?? "",
+    "Effective Price": item.productDiscountPrice || item.productPrice || "",
     "Product Image": item.productImage ? getAssetUrl(item.productImage) : "",
     "Added At": formatDate(item.addedAt),
   }));
@@ -238,7 +297,9 @@ export const exportAllCartsToExcel = (carts = []) => {
     "Entry ID": item._id || "",
     "Customer Name": item.userName || "",
     "Customer Email": item.userEmail || "",
+    "Customer Phone": item.userPhone || "",
     "Product Name": item.productName || "",
+    "Product Variant": item.productVariant || "",
     "Product Price": item.productPrice ?? "",
     Quantity: item.quantity ?? 0,
     "Item Total": item.itemTotal ?? "",
@@ -256,8 +317,27 @@ export const exportAllReviewsToExcel = (reviews = []) => {
     "Product Name": review.product?.name || "",
     Rating: review.rating ?? "",
     Comment: review.comment || "",
+    Status: review.status || "Pending",
+    "Verified Purchase": review.verifiedPurchase ? "Yes" : "No",
     "Created At": formatDate(review.createdAt),
     "Updated At": formatDate(review.updatedAt),
   }));
   return writeRowsToExcel(rows, "All Reviews", "all-reviews");
 };
+
+export const exportAllInquiriesToExcel = (inquiries = []) => {
+  const rows = inquiries.map((inq, index) => ({
+    "#": index + 1,
+    "Inquiry ID": inq._id || "",
+    "Customer Name": inq.name || "",
+    Email: inq.email || "",
+    Phone: inq.phone || "",
+    Subject: inq.subject || "",
+    Message: inq.message || "",
+    Status: inq.status || "New",
+    "Admin Notes": inq.adminNotes || "",
+    "Created At": formatDate(inq.createdAt),
+  }));
+  return writeRowsToExcel(rows, "All Inquiries", "all-inquiries");
+};
+

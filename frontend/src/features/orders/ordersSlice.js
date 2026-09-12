@@ -31,12 +31,16 @@ export const fetchOrderById = createAsyncThunk(
 
 export const updateOrderStatus = createAsyncThunk(
   "orders/updateStatus",
-  async ({ id, orderStatus, paymentStatus }, { rejectWithValue }) => {
+  async (
+    { id, orderStatus, paymentStatus, transactionId },
+    { rejectWithValue },
+  ) => {
     try {
-      const response = await API.put(`/orders/admin/${id}/status`, {
-        orderStatus,
-        paymentStatus,
-      });
+      const payload = {};
+      if (orderStatus !== undefined) payload.orderStatus = orderStatus;
+      if (paymentStatus !== undefined) payload.paymentStatus = paymentStatus;
+      if (transactionId !== undefined) payload.transactionId = transactionId;
+      const response = await API.put(`/orders/admin/${id}/status`, payload);
       return response.data.order;
     } catch (error) {
       return rejectWithValue(
@@ -94,10 +98,42 @@ const ordersSlice = createSlice({
           (order) => order._id === action.payload._id,
         );
         if (index !== -1) {
-          state.orders[index] = action.payload;
+          state.orders[index] = {
+            ...state.orders[index],
+            ...action.payload,
+            user:
+              typeof action.payload.user === "object" && action.payload.user !== null
+                ? action.payload.user
+                : state.orders[index].user,
+            shippingAddress:
+              typeof action.payload.shippingAddress === "object" &&
+              action.payload.shippingAddress !== null
+                ? action.payload.shippingAddress
+                : state.orders[index].shippingAddress,
+            orderItems:
+              Array.isArray(action.payload.orderItems) && action.payload.orderItems.length > 0
+                ? action.payload.orderItems
+                : state.orders[index].orderItems,
+          };
         }
         if (state.selectedOrder?._id === action.payload._id) {
-          state.selectedOrder = action.payload;
+          state.selectedOrder = {
+            ...state.selectedOrder,
+            ...action.payload,
+            user:
+              typeof action.payload.user === "object" && action.payload.user !== null
+                ? action.payload.user
+                : state.selectedOrder.user,
+            shippingAddress:
+              typeof action.payload.shippingAddress === "object" &&
+              action.payload.shippingAddress !== null
+                ? action.payload.shippingAddress
+                : state.selectedOrder.shippingAddress,
+            orderItems:
+              Array.isArray(action.payload.orderItems) && action.payload.orderItems.length > 0
+                ? action.payload.orderItems
+                : state.selectedOrder.orderItems,
+          };
         }
       })
       .addCase(updateOrderStatus.rejected, (state, action) => {

@@ -1,10 +1,17 @@
 import jwt from "jsonwebtoken";
 import { User } from "../models/user.model.js";
-// Fix: Default import use kiya hai
 
+// Sirf customer 'token' cookie + User model. Admin ka 'adminToken' alag
+// adminRoute me verify hota hai — dono sessions kabhi mix nahi hote
+// (warna cart/orders/reviews me user ki jagah Admin id save ho jaati).
 export const protectedRoute = async (req, res, next) => {
   try {
-    const token = req.cookies.token;
+    const authHeader = req.headers.authorization;
+    const bearerToken =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7).trim()
+        : null;
+    const token = req.cookies.token || bearerToken;
 
     if (!token) {
       return res.status(401).json({
@@ -25,8 +32,6 @@ export const protectedRoute = async (req, res, next) => {
     req.user = user;
     next();
   } catch (error) {
-    console.error("Auth Middleware Error:", error);
-
     if (
       error.name === "TokenExpiredError" ||
       error.name === "JsonWebTokenError"
@@ -36,6 +41,7 @@ export const protectedRoute = async (req, res, next) => {
       });
     }
 
+    console.error("Auth Middleware Error:", error);
     return res.status(500).json({
       message: "Internal server error",
     });

@@ -5,101 +5,171 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const UPLOADS_BASE = path.resolve(__dirname, "..", "uploads");
 
-const uploadDir = path.join(__dirname, "..", "uploads");
+const MB = 1024 * 1024;
+const IMAGE_MAX_SIZE = 5 * MB;
+const PRODUCT_IMAGE_MAX_SIZE = 10 * MB;
+const CSV_MAX_SIZE = 2 * MB;
 
-// 1. Yahan 'banners' folder add kiya gaya hai
-const foldersToCreate = [
-  uploadDir,
-  path.join(uploadDir, "categories"),
-  path.join(uploadDir, "collections"), // 🆕 Collections images
-  path.join(uploadDir, "products"),
-  path.join(uploadDir, "banners"), // 🔥 Banner folder added
-  path.join(uploadDir, "avatars"), // 🆕 User profile photos
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+  "image/jpg",
 ];
 
-foldersToCreate.forEach((folder) => {
-  if (!fs.existsSync(folder)) {
-    fs.mkdirSync(folder, { recursive: true });
-    console.log(`✅ Folder created: ${folder}`);
-  }
-});
+// fileFilter rejections ko baaki errors se alag pehchaanne ke liye code
+const INVALID_FILE_TYPE = "INVALID_FILE_TYPE";
+const invalidFileError = (message) =>
+  Object.assign(new Error(message), { code: INVALID_FILE_TYPE });
 
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-
-  if (allowedTypes.includes(file.mimetype)) {
+const imageFileFilter = (req, file, cb) => {
+  if (ALLOWED_IMAGE_TYPES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only JPG, PNG and WEBP images are allowed"), false);
+    cb(invalidFileError("Only JPG, PNG, WEBP and AVIF images are allowed"), false);
   }
 };
 
-const createUpload = (subFolder) => {
+const normalizeFilePath = (subFolder, filename) => `/uploads/${subFolder}/${filename}`;
+
+/**
+ * Creates a Multer upload instance configured with local diskStorage.
+ * Stores files in backend/uploads/<subFolder> and normalizes file.path
+ * to web-friendly relative path: "/uploads/<subFolder>/<filename>".
+ *
+ * @param {string} subFolder - Subfolder name inside 'uploads' directory
+ * @param {number} maxFileSize - Maximum file size in bytes (default: 5MB)
+ */
+const createLocalUpload = (subFolder, maxFileSize = IMAGE_MAX_SIZE) => {
+  const destDir = path.resolve(UPLOADS_BASE, subFolder);
+  if (!fs.existsSync(destDir)) {
+    fs.mkdirSync(destDir, { recursive: true });
+  }
+
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
-      const folder = subFolder ? path.join(uploadDir, subFolder) : uploadDir;
-      cb(null, folder);
+      if (!fs.existsSync(destDir)) {
+        fs.mkdirSync(destDir, { recursive: true });
+      }
+      cb(null, destDir);
     },
-
     filename: (req, file, cb) => {
-      const extension = path.extname(file.originalname);
-      const uniqueName = `${Date.now()}-${Math.round(
-        Math.random() * 1e9,
-      )}${extension}`;
-      cb(null, uniqueName);
+      const ext = (path.extname(file.originalname) || ".jpg").toLowerCase();
+      const nameWithoutExt = path
+        .basename(file.originalname, ext)
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, "-")
+        .replace(/-+/g, "-")
+        .slice(0, 30);
+      const uniqueFilename = `${nameWithoutExt || "image"}-${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+      cb(null, uniqueFilename);
     },
   });
 
-  return multer({
+  const uploadInstance = multer({
     storage,
-    fileFilter,
+    fileFilter: imageFileFilter,
     limits: {
-      fileSize: 5 * 1024 * 1024, // 5MB
+      fileSize: maxFileSize,
     },
   });
+
+  return {
+    single: (fieldName) => (req, res, next) => {
+      uploadInstance.single(fieldName)(req, res, (err) => {
+        if (err) return next(err);
+        if (req.file) {
+          req.file.path = normalizeFilePath(subFolder, req.file.filename);
+        }
+        next();
+      });
+    },
+    fields: (fieldsArray) => (req, res, next) => {
+      uploadInstance.fields(fieldsArray)(req, res, (err) => {
+        if (err) return next(err);
+        if (req.files) {
+          for (const key of Object.keys(req.files)) {
+            req.files[key].forEach((f) => {
+              f.path = normalizeFilePath(subFolder, f.filename);
+            });
+          }
+        }
+        next();
+      });
+    },
+    array: (fieldName, maxCount) => (req, res, next) => {
+      uploadInstance.array(fieldName, maxCount)(req, res, (err) => {
+        if (err) return next(err);
+        if (req.files && Array.isArray(req.files)) {
+          req.files.forEach((f) => {
+            f.path = normalizeFilePath(subFolder, f.filename);
+          });
+        }
+        next();
+      });
+    },
+  };
 };
 
-// Exports
-export const categoryUpload = createUpload("categories");
-export const collectionUpload = createUpload("collections"); // 🆕 Collections
-export const productUpload = createUpload("products");
-export const bannerUpload = createUpload("banners"); // 🔥 Banner export added
-export const avatarUpload = createUpload("avatars"); // 🆕 User profile photos
+// Exports for entity image uploads (Local Disk Storage)
+export const categoryUpload = createLocalUpload("categories");
+export const collectionUpload = createLocalUpload("collections");
+export const productUpload = createLocalUpload("products", PRODUCT_IMAGE_MAX_SIZE); // 10MB for products
+export const bannerUpload = createLocalUpload("banners");
+export const avatarUpload = createLocalUpload("avatars");
 
 /* =========================================================
-   🆕 Avatar upload WITH error handling
-   Multer errors (file > 5MB, invalid type) directly global error
-   handler me 500 ban jaate the — ye wrapper unhe clean 400 banata hai
+   UPLOAD ERROR HANDLER (index.js me global handler se pehle)
+   Multer / fileFilter errors ko clean JSON response me badalta hai
+========================================================= */
+const PRODUCT_IMAGE_FIELDS = new Set(["desktopImages", "mobileImages", "variantImages"]);
+
+const maxSizeForField = (field) => {
+  if (field === "file") return CSV_MAX_SIZE;
+  if (PRODUCT_IMAGE_FIELDS.has(field)) return PRODUCT_IMAGE_MAX_SIZE;
+  return IMAGE_MAX_SIZE;
+};
+
+export const uploadErrorHandler = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({
+        message: `File must be ${maxSizeForField(err.field) / MB}MB or smaller`,
+      });
+    }
+    // LIMIT_UNEXPECTED_FILE (galat field / maxCount se zyada files) etc.
+    return res.status(400).json({ message: err.message, field: err.field });
+  }
+
+  if (err?.code === INVALID_FILE_TYPE) {
+    return res.status(400).json({ message: err.message });
+  }
+
+  return next(err);
+};
+
+/* =========================================================
+   Avatar upload WITH error handling wrapper
 ========================================================= */
 export const avatarUploadWithErrorHandling = [
   avatarUpload.single("avatar"),
 
-  // Multer error handler — 4 args hone se Express ise error middleware
-  // ki tarah treat karta hai
   (err, req, res, next) => {
-    if (!err) return next();
-
     if (err.code === "LIMIT_FILE_SIZE") {
       return res.status(400).json({
         message: "Avatar image must be 5MB or smaller",
       });
     }
-
-    if (err.message?.includes("Only JPG")) {
-      return res.status(400).json({ message: err.message });
-    }
-
-    console.error("Avatar Upload Error:", err);
-    return res.status(400).json({
-      message: err.message || "Avatar upload failed",
-    });
+    return uploadErrorHandler(err, req, res, next);
   },
 ];
 
 /* =========================================================
-   🆕 CSV BULK UPLOAD (memory storage — file disk par nahi jaati,
-      buffer ko direct controllers parse karte hain)
+   CSV BULK UPLOAD (memory storage — file buffer direct
+   controllers parse karte hain)
 ========================================================= */
 const ALLOWED_CSV_MIMES = [
   "text/csv",
@@ -113,7 +183,7 @@ const csvFileFilter = (req, file, cb) => {
   if (isCsvExtension && ALLOWED_CSV_MIMES.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error("Only .csv files are allowed"), false);
+    cb(invalidFileError("Only .csv files are allowed"), false);
   }
 };
 
@@ -121,6 +191,6 @@ export const csvUpload = multer({
   storage: multer.memoryStorage(),
   fileFilter: csvFileFilter,
   limits: {
-    fileSize: 2 * 1024 * 1024, // 2MB — bulk CSV ke liye kaafi
+    fileSize: CSV_MAX_SIZE, // 2MB — bulk CSV ke liye kaafi
   },
 });

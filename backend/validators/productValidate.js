@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { genderArraySchema } from "./genderSchema.js";
 
-export const productValidationSchema = z.object({
+export const baseProductSchema = z.object({
   categoryId: z
     .string({
       error: "Category is required",
@@ -34,32 +35,8 @@ export const productValidationSchema = z.object({
 
   brand: z.string().trim().optional().default(""),
 
-  // Sub-category multi-select - input kisi bhi shape me aa sakta hai:
-  // JSON string '["Men","Women"]', plain "Men", comma-separated "Men,Women"
-  // ya direct array. Sab normalize karke array banao.
-  subCategory: z
-    .preprocess((val) => {
-      if (val === undefined) return val; // .optional()/.default() handle karenge
-      if (val === null || val === "") return ["Men"]; // khali value - default
-      if (Array.isArray(val)) return val;
-      if (typeof val === "string") {
-        const trimmed = val.trim();
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (Array.isArray(parsed)) return parsed;
-        } catch {
-          // JSON nahi hai - plain / comma-separated string
-        }
-        return trimmed.split(",").map((v) => v.trim()).filter(Boolean);
-      }
-      return val;
-    }, z.array(
-      z.enum(["Men", "Women"], {
-        error: "Sub-category must be Men or Women",
-      }),
-    ).min(1, "Select at least one sub-category (Men or Women)"))
-    .optional()
-    .default(["Men"]),
+  // Gender multi-select — JSON string / plain / comma-separated / array
+  gender: genderArraySchema(["Men"]),
 
   // 🔥 IMAGE SCHEMA UPDATED HERE 🔥
   images: z.object({
@@ -146,3 +123,29 @@ export const productValidationSchema = z.object({
     .optional()
     .default([]),
 });
+
+export const productValidationSchema = baseProductSchema.refine(
+  (data) => {
+    if (data.discountPrice != null && data.price != null) {
+      return data.discountPrice < data.price;
+    }
+    return true;
+  },
+  {
+    message: "Sale price must be less than the regular price",
+    path: ["discountPrice"],
+  },
+);
+
+export const productUpdateSchema = baseProductSchema.partial().refine(
+  (data) => {
+    if (data.discountPrice != null && data.price != null) {
+      return data.discountPrice < data.price;
+    }
+    return true;
+  },
+  {
+    message: "Sale price must be less than the regular price",
+    path: ["discountPrice"],
+  },
+);

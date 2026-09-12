@@ -1,3 +1,4 @@
+// Server entry point - local uploads enabled
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -7,6 +8,8 @@ import { fileURLToPath } from "url";
 
 import { connectDB } from "./config/db.js";
 import { createAdmin } from "./config/createAdmin.js";
+import { uploadErrorHandler } from "./middleware/upload.middleware.js";
+import { runDataMigrations } from "./config/migrations.js";
 
 // ✅ Sabhi Routers ko yahan import kiya gaya hai
 import authRouter from "./routes/auth.routes.js";
@@ -21,6 +24,8 @@ import couponRouter from "./routes/coupon.routes.js";
 import orderRouter from "./routes/order.routes.js";
 import reviewRouter from "./routes/review.routes.js";
 import wishlistRouter from "./routes/wishlist.routes.js";
+import settingsRouter from "./routes/settings.routes.js";
+import inquiryRouter from "./routes/inquiry.routes.js";
 
 dotenv.config();
 
@@ -49,10 +54,27 @@ app.use(
       }
 
       try {
-        const hostname = new URL(origin).hostname;
+        const parsedUrl = new URL(origin);
+        const hostname = parsedUrl.hostname;
         const isLocalhost = ["localhost", "127.0.0.1"].includes(hostname);
+        const isLocalNetwork =
+          hostname.startsWith("192.168.") ||
+          hostname.startsWith("10.") ||
+          /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
 
-        if (isLocalhost) {
+        const configuredOrigins = [
+          process.env.FRONTEND_URL,
+          process.env.ADMIN_URL,
+        ]
+          .filter(Boolean)
+          .flatMap((u) => u.split(",").map((s) => s.trim().toLowerCase()));
+
+        if (
+          isLocalhost ||
+          isLocalNetwork ||
+          configuredOrigins.includes(origin.toLowerCase()) ||
+          configuredOrigins.includes(parsedUrl.origin.toLowerCase())
+        ) {
           callback(null, origin);
           return;
         }
@@ -88,11 +110,16 @@ app.use("/api/coupons", couponRouter);
 app.use("/api/orders", orderRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/wishlist", wishlistRouter);
+app.use("/api/settings", settingsRouter);
+app.use("/api/inquiries", inquiryRouter);
 
 // Base Route
 app.get("/", (req, res) => {
   res.send("Ecommerce Backend API is Running");
 });
+
+// Upload errors (Multer / Cloudinary) → clean 400/502, baaki global handler ko
+app.use(uploadErrorHandler);
 
 // Global Error Handler
 app.use((err, req, res, next) => {
@@ -107,6 +134,15 @@ app.use((err, req, res, next) => {
 const startServer = async () => {
   try {
     await connectDB();
+
+    // Purana data naye schema shape me (idempotent). Fail ho toh log karke
+    // server chalu rehta hai — agli restart par dobara try hoga
+    try {
+      await runDataMigrations();
+    } catch (migrationError) {
+      console.error("Data Migration Error:", migrationError);
+    }
+
     await createAdmin();
 
     app.listen(PORT, () => {

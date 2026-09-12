@@ -6,11 +6,11 @@
 const PageHeader = ({ title, subtitle, actions, meta }) => (
   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
     <div className="min-w-0">
-      <h1 className="text-[22px] sm:text-[24px] font-extrabold text-slate-900 tracking-tight leading-tight">
+      <h1 className="text-[22px] sm:text-[24px] font-extrabold text-(--ink) tracking-tight leading-tight">
         {title}
       </h1>
       {subtitle && (
-        <p className="text-[13px] text-slate-500 font-medium mt-1 leading-snug">
+        <p className="text-[13px] text-(--ink-muted) font-medium mt-1 leading-snug">
           {subtitle}
         </p>
       )}

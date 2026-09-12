@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchBanners } from "../features/banners/bannersSlice";
+import {
+  fetchBanners,
+  toggleBannerStatus,
+} from "../features/banners/bannersSlice";
 import { exportAllBannersToExcel } from "../utils/exportProductToExcel";
 import { notifyInfo } from "../lib/toast";
 
@@ -21,6 +24,7 @@ const BannersPage = () => {
   const [editData, setEditData] = useState(null);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState(null);
+  const [pageFilter, setPageFilter] = useState(null);
 
   useEffect(() => {
     dispatch(fetchBanners());
@@ -31,6 +35,7 @@ const BannersPage = () => {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return banners.filter((b) => {
+      if (pageFilter && b.page !== pageFilter) return false;
       if (status === "active" && !b.isActive) return false;
       if (status === "inactive" && b.isActive) return false;
       if (!q) return true;
@@ -40,7 +45,7 @@ const BannersPage = () => {
         String(b.linkUrl || "").toLowerCase().includes(q)
       );
     });
-  }, [banners, search, status]);
+  }, [banners, search, status, pageFilter]);
 
   const handleOpenAdd = () => {
     setEditData(null);
@@ -69,7 +74,7 @@ const BannersPage = () => {
     <div className="page-shell">
       <PageHeader
         title="Banners"
-        subtitle="Hero images and promo slots shown on the storefront home page."
+        subtitle="Hero promotional banners and campaign slots displayed across storefront pages."
         meta={
           <>
             <span className="meta-chip">
@@ -104,6 +109,17 @@ const BannersPage = () => {
           onChange={setSearch}
           placeholder="Search title, subtitle or link…"
         />
+        <select
+          value={pageFilter || ""}
+          onChange={(e) => setPageFilter(e.target.value || null)}
+          className="admin-select"
+          aria-label="Filter by page"
+        >
+          <option value="">All pages</option>
+          <option value="home">Home</option>
+          <option value="shop">Shop</option>
+          <option value="wishlist">Wishlist</option>
+        </select>
         <SegmentedFilter
           value={status}
           onChange={setStatus}
@@ -128,6 +144,7 @@ const BannersPage = () => {
           banners={filtered}
           onEdit={handleOpenEdit}
           onCreate={handleOpenAdd}
+          onToggleStatus={(id) => dispatch(toggleBannerStatus(id))}
         />
       )}
 

@@ -1,8 +1,9 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   deleteCollection,
   restoreCollection,
+  toggleCollectionStatus,
 } from "../../features/collections/collectionsSlice";
 import useTableControls from "../../hooks/useTableControls";
 import ConfirmDialog from "../common/ConfirmDialog";
@@ -12,39 +13,14 @@ import SortableTh from "../common/SortableTh";
 import Thumb from "../common/Thumb";
 import {
   GridIcon,
+  EyeIcon,
   PencilIcon,
   RefreshIcon,
   TrashIcon,
   PlusIcon,
+  ExternalLinkIcon,
 } from "../common/Icon";
-
-const OPERATOR_LABELS = {
-  gt: ">",
-  gte: "≥",
-  lt: "<",
-  lte: "≤",
-  eq: "=",
-  withinDays: "last",
-};
-const FIELD_LABELS = {
-  price: "Price",
-  stock: "Stock",
-  createdAt: "Created",
-  subCategory: "Dept",
-};
-
-// Automated collection ke rules ka human-readable summary
-const describeRules = (rules = []) =>
-  rules
-    .map((r) => {
-      if (r.field === "createdAt" && r.operator === "withinDays")
-        return `Created within ${r.value} days`;
-      if (r.field === "subCategory") return `Dept = ${r.value}`;
-      return `${FIELD_LABELS[r.field] || r.field} ${
-        OPERATOR_LABELS[r.operator] || r.operator
-      } ${r.value}`;
-    })
-    .join(" AND ");
+import { getStorefrontUrl } from "../../utils/storefrontUrl";
 
 const ACCESSORS = {
   name: (c) => c.name,
@@ -52,7 +28,7 @@ const ACCESSORS = {
   status: (c) => (c.isActive !== false ? 1 : 0),
 };
 
-const CollectionTable = ({ collections, onEdit, onCreate }) => {
+const CollectionTable = ({ collections, onEdit, onCreate, onView }) => {
   const dispatch = useDispatch();
   const { deleteLoading } = useSelector((state) => state.collections);
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -83,7 +59,7 @@ const CollectionTable = ({ collections, onEdit, onCreate }) => {
                   onSort={table.toggleSort}
                 />
                 <th scope="col">Description</th>
-                <th scope="col">Type</th>
+                
                 <SortableTh
                   label="Products"
                   sortKey="products"
@@ -106,7 +82,7 @@ const CollectionTable = ({ collections, onEdit, onCreate }) => {
                 table.rows.map((col) => (
                   <tr
                     key={col._id}
-                    className="hover:bg-slate-50/80 transition-colors"
+                    className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
                   >
                     <td>
                       <div className="flex items-center gap-3">
@@ -117,73 +93,80 @@ const CollectionTable = ({ collections, onEdit, onCreate }) => {
                           rounded="rounded-xl"
                         />
                         <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <p className="cell-strong truncate text-[13px]">
                               {col.name}
                             </p>
                             {col.showOnHomePage === true && (
                               <span
-                                className="shrink-0 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
-                                title="Featured on website home page"
+                                className="shrink-0 rounded-full border border-amber-200 bg-amber-50 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+                                title="Featured on website home page under 'Featured Pieces'"
                               >
                                 Home
                               </span>
                             )}
                             {col.showAsBadge === true && (
                               <span
-                                className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700"
-                                title="Shown as badge on product cards"
+                                className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 dark:border-indigo-800/60 dark:bg-indigo-950/40 dark:text-indigo-300 px-2 py-0.5 text-[10px] font-semibold text-indigo-700"
+                                title="Shown as a promotional badge on member product cards"
                               >
                                 Badge
                               </span>
                             )}
                           </div>
-                          <span className="cell-sub font-mono truncate text-slate-400 text-[11px]">
+                          <span className="cell-sub font-mono truncate text-slate-400 dark:text-slate-500 text-[11px]">
                             /{col.slug}
                           </span>
                         </div>
                       </div>
                     </td>
                     <td className="max-w-70">
-                      <p className="line-clamp-2 text-slate-500 text-[12.5px]">
+                      <p className="line-clamp-2 text-slate-500 dark:text-slate-400 text-[12.5px]">
                         {col.description || "—"}
                       </p>
                     </td>
                     <td>
-                      {col.type === "automated" ? (
-                        <div className="min-w-0">
-                          <span className="shrink-0 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
-                            Automated
-                          </span>
-                          <p
-                            className="mt-0.5 truncate text-[11px] text-slate-400"
-                            title={describeRules(col.rules)}
-                          >
-                            {describeRules(col.rules) || "No rules"}
-                          </p>
-                        </div>
-                      ) : (
-                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                          Manual
+                      <button
+                        type="button"
+                        onClick={() => onView?.(col)}
+                        className="inline-flex items-center gap-1.5 font-semibold text-[13px] text-(--ink-soft) hover:text-(--brand) cursor-pointer group"
+                        title="View products in this collection"
+                      >
+                        <span className="tabular-nums font-bold text-(--ink)">
+                          {col.productCount ?? 0}
                         </span>
-                      )}
+                        <span className="text-[12px] text-(--ink-muted) group-hover:underline">
+                          {(col.productCount ?? 0) === 1 ? "product" : "products"}
+                        </span>
+                      </button>
                     </td>
                     <td>
-                      <span className="cell-strong text-[13px]">
-                        {col.productCount ?? "—"}
-                      </span>
-                    </td>
-                    <td>
-                      {col.isActive !== false ? (
-                        <span className="meta-chip meta-chip-success">
-                          Active
-                        </span>
-                      ) : (
-                        <span className="meta-chip">Hidden</span>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => dispatch(toggleCollectionStatus(col._id))}
+                        className={`meta-chip cursor-pointer transition-transform hover:scale-105 ${
+                          col.isActive !== false ? "meta-chip-success" : ""
+                        }`}
+                        title={
+                          col.isActive !== false
+                            ? "Click to deactivate (hide from storefront)"
+                            : "Click to activate"
+                        }
+                      >
+                        <span className="badge-dot" />
+                        {col.isActive !== false ? "Active" : "Hidden"}
+                      </button>
                     </td>
                     <td className="text-right">
                       <div className="flex justify-end gap-1.5">
+                        <button
+                          onClick={() => onView?.(col)}
+                          className="icon-btn icon-btn-view"
+                          title="View products"
+                          aria-label={`View products in ${col.name}`}
+                        >
+                          <EyeIcon className="w-3.5 h-3.5" />
+                        </button>
                         <button
                           onClick={() => onEdit(col)}
                           className="icon-btn icon-btn-edit"
@@ -192,6 +175,16 @@ const CollectionTable = ({ collections, onEdit, onCreate }) => {
                         >
                           <PencilIcon className="w-3.5 h-3.5" />
                         </button>
+                        <a
+                          href={getStorefrontUrl(`/shop?collections=${col._id}`)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="View collection on Live Storefront"
+                          aria-label={`View ${col.name} on live storefront`}
+                          className="icon-btn icon-btn-view text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50! dark:hover:bg-indigo-950/40!"
+                        >
+                          <ExternalLinkIcon className="w-3.5 h-3.5" />
+                        </a>
                         {col.isActive === false && (
                           <button
                             onClick={() =>
@@ -219,11 +212,11 @@ const CollectionTable = ({ collections, onEdit, onCreate }) => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" className="empty-cell">
+                  <td colSpan="5" className="empty-cell">
                     <EmptyState
                       icon={<GridIcon className="w-5 h-5" />}
                       title="No collections yet"
-                      message="Collections curate products for marketing — badges, home sections aur shop filters. Create the first one to get started."
+                      message="Curate products for marketing campaigns, homepage showcases, and promotional badges. Create your first collection to get started."
                       action={
                         onCreate && (
                           <button

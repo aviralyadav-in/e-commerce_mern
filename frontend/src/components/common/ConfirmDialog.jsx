@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangleIcon, InfoIcon } from "./Icon";
 
 const ConfirmDialog = ({
@@ -25,7 +26,13 @@ const ConfirmDialog = ({
 
   const danger = variant === "danger";
 
-  return (
+  // 🛠️ FIX: portal se document.body me render karo — warna topbar jaise
+  // `backdrop-filter` wale ancestors fixed positioning ka containing block
+  // ban jaate hain aur modal viewport ke bajaye parent ke relative center
+  // hota hai (Navbar ke logout modal ka top-center clipped issue).
+  // Portal se dialog hamesha poore viewport me centered rahega — Sidebar
+  // aur Navbar dono se bilkul identical dikhega.
+  return createPortal(
     <div className="modal-backdrop" onClick={onCancel}>
       <div
         className="modal-panel max-w-95"
@@ -39,8 +46,8 @@ const ConfirmDialog = ({
             <div
               className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center ${
                 danger
-                  ? "bg-red-50 text-red-600"
-                  : "bg-orange-50 text-(--brand)"
+                  ? "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400"
+                  : "bg-orange-50 dark:bg-orange-950/40 text-(--brand) dark:text-indigo-400"
               }`}
             >
               {danger ? (
@@ -85,7 +92,8 @@ const ConfirmDialog = ({
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

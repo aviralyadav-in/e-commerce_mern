@@ -1,37 +1,60 @@
-import fs from "fs/promises";
-import path from "path";
 import mongoose from "mongoose";
-import { productValidationSchema } from "../validators/productValidate.js";
+import {
+  productValidationSchema,
+  productUpdateSchema,
+} from "../validators/productValidate.js";
 import { Category } from "../models/category.model.js";
 import { Collection } from "../models/collection.model.js";
 import { Product } from "../models/product.model.js";
 import { buildCollectionsCondition } from "../utils/collectionMatcher.js";
 import { csvToObjects, slugify, toBool } from "../utils/csvParser.js";
+import { deleteFile as deleteFromCloudinary } from "../utils/storage.js";
+import { escapeRegex } from "../utils/escapeRegex.js";
+import { splitByModelValidation } from "../utils/validateDoc.js";
 
 /* =========================================================
    HELPER FUNCTIONS
 ========================================================= */
+// 🆕 'variantImages' me aayi jo files kisi variant row me assign nahi hui
+// (newImageCount se zyada files, naam-less row, ya variants JSON absent/invalid)
+// wo DB me save nahi hoti — unhe Cloudinary se hata do, warna orphan reh jaati hain.
+const deleteUnassignedVariantUploads = async (uploadedFiles = [], variants = []) => {
+  const assigned = new Set(variants.flatMap((v) => v.images || []));
+  const unassigned = uploadedFiles
+    .map((f) => f.path)
+    .filter((p) => !assigned.has(p));
+  await Promise.all(unassigned.map(deleteFromCloudinary));
+};
+
 // 🆕 Variant rows ke saath uploaded variant images distribute karo.
 // Admin FormData me har variant row { name, images (retained URLs),
 // newImageCount } bhejta hai aur files 'variantImages' field me row-order
 // me aati hain — queue se sequentially utha kar rows me baantte hain.
-const buildVariantImages = (variantRows, uploadedFiles = []) => {
+// existingImages = product ke variants me pehle se saved URLs. Retained images
+// sirf inme se ho sakti hain — body se aayi arbitrary URL (jo baad me remove
+// hone par kisi aur asset ko Cloudinary se delete kar deti) ignore hoti hai.
+const buildVariantImages = (
+  variantRows,
+  uploadedFiles = [],
+  existingImages = new Set(),
+) => {
   let queue = [...uploadedFiles];
   return variantRows
     .map((v) => {
-      const name = String(v?.name || "").trim();
-      if (!name) return null;
+      // Queue pehle consume karo — naam-less row ki files agli row me shift na hon
       const count = Number(v?.newImageCount || 0);
       const safeCount = Number.isFinite(count) && count > 0 ? count : 0;
       const newPaths = queue
         .slice(0, safeCount)
-        .map((f) => `/uploads/products/${f.filename}`);
+        .map((f) => f.path);
       queue = queue.slice(safeCount);
+      const name = String(v?.name || "").trim();
+      if (!name) return null;
       return {
         name,
         images: [
           ...(Array.isArray(v?.images)
-            ? v.images.filter((img) => typeof img === "string" && img)
+            ? v.images.filter((img) => existingImages.has(img))
             : []),
           ...newPaths,
         ],
@@ -91,36 +114,16 @@ const filterExistingCollections = async (ids = []) => {
   return ids.filter((id) => validIds.has(String(id)));
 };
 
-const deleteImageFile = async (imagePath) => {
-  if (!imagePath) return;
-  if (imagePath.startsWith("http")) return; // External URL ignore karein
-
-  try {
-    const filePath = path.join(process.cwd(), imagePath.replace(/^\/+/, ""));
-    await fs.unlink(filePath);
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      console.error("Delete Image File Error:", error);
-    }
-  }
-};
-
-// Form-data/Multer ke baad saari uploaded files ko ek flat array me laane ka helper (Delete karne ke liye)
+// Form-data/Multer ke baad saari uploaded files ko ek flat array me laane ka helper (Delete/cleanup karne ke liye)
 const getUploadedFilesPaths = (files) => {
   if (!files) return [];
   const paths = [];
   if (files.desktopImages)
-    paths.push(
-      ...files.desktopImages.map((f) => `/uploads/products/${f.filename}`),
-    );
+    paths.push(...files.desktopImages.map((f) => f.path));
   if (files.mobileImages)
-    paths.push(
-      ...files.mobileImages.map((f) => `/uploads/products/${f.filename}`),
-    );
+    paths.push(...files.mobileImages.map((f) => f.path));
   if (files.variantImages)
-    paths.push(
-      ...files.variantImages.map((f) => `/uploads/products/${f.filename}`),
-    );
+    paths.push(...files.variantImages.map((f) => f.path));
   return paths;
 };
 
@@ -130,14 +133,10 @@ const extractImages = (req) => {
 
   if (req.files) {
     if (req.files.desktopImages) {
-      images.desktop = req.files.desktopImages.map(
-        (file) => `/uploads/products/${file.filename}`,
-      );
+      images.desktop = req.files.desktopImages.map((file) => file.path);
     }
     if (req.files.mobileImages) {
-      images.mobile = req.files.mobileImages.map(
-        (file) => `/uploads/products/${file.filename}`,
-      );
+      images.mobile = req.files.mobileImages.map((file) => file.path);
     }
   }
   return images;
@@ -185,7 +184,7 @@ export const createProduct = async (req, res) => {
     if (!result.success) {
       // Validation fail - uploaded files delete karo
       const uploadedPaths = getUploadedFilesPaths(req.files);
-      await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+      await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
 
       return res.status(400).json({
         message: result.error.issues[0].message,
@@ -198,14 +197,14 @@ export const createProduct = async (req, res) => {
     // 4. Category Check
     if (!mongoose.Types.ObjectId.isValid(categoryId)) {
       const uploadedPaths = getUploadedFilesPaths(req.files);
-      await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+      await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
       return res.status(400).json({ message: "Invalid category ID" });
     }
 
     const categoryExists = await Category.findById(categoryId).lean();
     if (!categoryExists) {
       const uploadedPaths = getUploadedFilesPaths(req.files);
-      await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+      await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
       return res.status(404).json({ message: "Category not found" });
     }
 
@@ -220,7 +219,7 @@ export const createProduct = async (req, res) => {
     const existingProduct = await Product.findOne({ $or: [{ slug }, { sku }] });
     if (existingProduct) {
       const uploadedPaths = getUploadedFilesPaths(req.files);
-      await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+      await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
       return res.status(409).json({
         message:
           existingProduct.slug === slug
@@ -232,6 +231,12 @@ export const createProduct = async (req, res) => {
     // 6. Create Product
     const product = await Product.create(result.data);
 
+    // 🆕 Variant uploads jo kisi row me assign nahi hui — Cloudinary se hatao
+    await deleteUnassignedVariantUploads(
+      req.files?.variantImages,
+      result.data.variants,
+    );
+
     return res.status(201).json({
       message: "Product created successfully",
       product,
@@ -239,7 +244,7 @@ export const createProduct = async (req, res) => {
   } catch (error) {
     console.error("Create Product Error:", error);
     const uploadedPaths = getUploadedFilesPaths(req.files);
-    await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+    await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -255,7 +260,8 @@ export const getProducts = async (req, res) => {
       sort = "createdAt",
       order = "desc",
       categoryId,
-      subCategory,
+      gender: genderParam,
+      subCategory: legacySubCategory,
       collections,
       homeFeatured,
       onSale,
@@ -267,22 +273,31 @@ export const getProducts = async (req, res) => {
       search,
     } = req.query;
 
-    const skip = (Number(page) - 1) * Number(limit);
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
+    const skip = (pageNum - 1) * limitNum;
     const filter = {};
     const andConditions = [];
 
-    // Multiple category support — comma-separated IDs
+    // Multiple category support — comma-separated IDs (sirf valid ObjectIds allow karo taaki CastError na aaye)
     if (categoryId) {
       const ids = String(categoryId)
         .split(",")
         .map((id) => id.trim())
-        .filter(Boolean);
-      filter.categoryId = ids.length > 1 ? { $in: ids } : ids[0];
+        .filter((id) => mongoose.Types.ObjectId.isValid(id));
+      if (ids.length > 0) {
+        filter.categoryId = ids.length > 1 ? { $in: ids } : ids[0];
+      } else {
+        // Agar categoryId di gayi par koi valid id nahi thi, toh empty result match
+        filter.categoryId = new mongoose.Types.ObjectId();
+      }
     }
 
     // Gender filter — comma-separated (Men, Women)
-    if (subCategory) {
-      filter.subCategory = { $in: String(subCategory).split(",").filter(Boolean) };
+    // Purana `subCategory` query param bhi backward-compat ke liye accept
+    const gender = genderParam ?? legacySubCategory;
+    if (gender) {
+      filter.gender = { $in: String(gender).split(",").filter(Boolean) };
     }
 
     // 🆕 Home page curation — homeFeatured=true → sirf un collections ke
@@ -346,7 +361,10 @@ export const getProducts = async (req, res) => {
         .map((id) => id.trim())
         .filter((id) => mongoose.Types.ObjectId.isValid(id));
       if (colIds.length) {
-        const condition = await buildCollectionsCondition(Collection, colIds);
+        const includeInactive = req.query.includeInactive === "true";
+        const condition = await buildCollectionsCondition(Collection, colIds, {
+          includeInactive,
+        });
         if (condition) andConditions.push(condition);
       }
     }
@@ -370,7 +388,6 @@ export const getProducts = async (req, res) => {
 
     // 🆕 Color filter — variants.name match (case-insensitive, multi-select)
     if (color) {
-      const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const colorRegexes = String(color)
         .split(",")
         .map((c) => c.trim())
@@ -390,10 +407,13 @@ export const getProducts = async (req, res) => {
     }
 
     if (search) {
+      // Escape karo — raw search string invalid regex ban sakta hai
+      const safeSearch = escapeRegex(String(search));
       andConditions.push({
         $or: [
-          { name: { $regex: search, $options: "i" } },
-          { description: { $regex: search, $options: "i" } },
+          { name: { $regex: safeSearch, $options: "i" } },
+          { description: { $regex: safeSearch, $options: "i" } },
+          { brand: { $regex: safeSearch, $options: "i" } },
         ],
       });
     }
@@ -409,12 +429,12 @@ export const getProducts = async (req, res) => {
         .populate("collections", "name slug showAsBadge") // 🆕 Collections section names
         .sort(sortOptions)
         .skip(skip)
-        .limit(Number(limit))
+        .limit(limitNum)
         .lean(),
       Product.countDocuments(filter),
     ]);
 
-    const totalPages = Math.ceil(totalProducts / Number(limit));
+    const totalPages = Math.ceil(totalProducts / limitNum);
 
     // 🆕 Shop filter UI ke liye — active products ke distinct variant colors
     let availableColors = [];
@@ -437,12 +457,12 @@ export const getProducts = async (req, res) => {
     return res.status(200).json({
       message: "Products fetched successfully",
       pagination: {
-        currentPage: Number(page),
+        currentPage: pageNum,
         totalPages,
         totalProducts,
-        limit: Number(limit),
-        hasNextPage: Number(page) < totalPages,
-        hasPrevPage: Number(page) > 1,
+        limit: limitNum,
+        hasNextPage: pageNum < totalPages,
+        hasPrevPage: pageNum > 1,
       },
       availableColors,
       products,
@@ -491,11 +511,13 @@ export const updateProduct = async (req, res) => {
     const { id } = req.params;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
+      await Promise.all(getUploadedFilesPaths(req.files).map(deleteFromCloudinary));
       return res.status(400).json({ message: "Invalid product ID" });
     }
 
     const product = await Product.findById(id);
     if (!product) {
+      await Promise.all(getUploadedFilesPaths(req.files).map(deleteFromCloudinary));
       return res.status(404).json({ message: "Product not found" });
     }
 
@@ -508,7 +530,9 @@ export const updateProduct = async (req, res) => {
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
-    // 2. Extract new images
+    // 2. Extract new images — images sirf upload se aati hain; JSON body ki
+    // arbitrary `images` ignore (retained desktop images niche merge hoti hain)
+    delete req.body.images;
     const newImages = extractImages(req);
 
     // Agar kisi device type ki nayi file aayi hai, TABHI images body me bhejein.
@@ -531,6 +555,7 @@ export const updateProduct = async (req, res) => {
       req.body.variants = buildVariantImages(
         variantRows,
         req.files?.variantImages || [],
+        new Set((product.variants || []).flatMap((v) => v.images || [])),
       );
     } else {
       delete req.body.variants;
@@ -546,21 +571,50 @@ export const updateProduct = async (req, res) => {
     }
 
     // 3. Partial Zod Validation
-    const result = productValidationSchema.partial().safeParse(req.body);
+    const result = productUpdateSchema.safeParse(req.body);
 
     if (!result.success) {
       const uploadedPaths = getUploadedFilesPaths(req.files);
-      await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+      await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
       return res.status(400).json({ message: result.error.issues[0].message });
     }
 
     // 4. Update data object (merge retained + new desktop images)
-    const updateData = { ...result.data };
+    // 🛠️ DEFAULT-LEAK GUARD — partial() + default(): missing fields me
+    // defaults (gender=["Men"], stock=0, isActive=true...) inject hokar
+    // existing values wipe na hon. Sirf request me bheji fields rakho.
+    const updateData = {};
+    Object.keys(result.data).forEach((key) => {
+      if (req.body[key] !== undefined) updateData[key] = result.data[key];
+    });
 
     // 🆕 Variants partial-update guard — request me variants nahi bheje toh
     // zod ka default [] purane variants wipe kar dega; usko roko.
     if (req.body.variants === undefined) {
       delete updateData.variants;
+    }
+
+    // Ensure discountPrice is strictly less than price (combining updated + existing values)
+    const effectivePrice =
+      updateData.price !== undefined ? updateData.price : product.price;
+    const effectiveDiscountPrice =
+      updateData.discountPrice !== undefined
+        ? updateData.discountPrice
+        : product.discountPrice;
+
+    if (
+      effectiveDiscountPrice !== null &&
+      effectiveDiscountPrice !== undefined &&
+      effectivePrice !== null &&
+      effectivePrice !== undefined
+    ) {
+      if (effectiveDiscountPrice >= effectivePrice) {
+        const uploadedPaths = getUploadedFilesPaths(req.files);
+        await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
+        return res.status(400).json({
+          message: "Sale price must be less than the regular price",
+        });
+      }
     }
 
     const MAX_DESKTOP_IMAGES = 5;
@@ -584,10 +638,17 @@ export const updateProduct = async (req, res) => {
       MAX_DESKTOP_IMAGES,
     );
 
+    // MAX_DESKTOP_IMAGES cap se bahar reh gayi nayi uploads kabhi save nahi
+    // hongi — Cloudinary par orphan na rahein
+    const droppedDesktopUploads = newImages.desktop.filter(
+      (img) => !finalDesktop.includes(img),
+    );
+    await Promise.all(droppedDesktopUploads.map(deleteFromCloudinary));
+
     if (req.body.retainedDesktopImages || newImages.desktop.length > 0) {
       if (finalDesktop.length === 0) {
         const uploadedPaths = getUploadedFilesPaths(req.files);
-        await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+        await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
         return res.status(400).json({
           message: "Please provide at least one product image.",
         });
@@ -605,18 +666,27 @@ export const updateProduct = async (req, res) => {
     }
 
     // 5. Unique Checks (Slug & SKU for other products)
-    if (updateData.slug || updateData.sku) {
+    const orConditions = [];
+    if (updateData.slug) orConditions.push({ slug: updateData.slug });
+    if (updateData.sku) orConditions.push({ sku: updateData.sku });
+
+    if (orConditions.length > 0) {
       const existingProduct = await Product.findOne({
-        $or: [{ slug: updateData.slug }, { sku: updateData.sku }],
+        $or: orConditions,
         _id: { $ne: id },
       });
 
       if (existingProduct) {
         const uploadedPaths = getUploadedFilesPaths(req.files);
-        await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+        await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
         return res
           .status(409)
-          .json({ message: "Slug or SKU already in use by another product" });
+          .json({
+            message:
+              existingProduct.slug === updateData.slug
+                ? "Product slug already exists"
+                : "Product SKU already exists",
+          });
       }
     }
 
@@ -636,10 +706,10 @@ export const updateProduct = async (req, res) => {
       const removedDesktop = product.images.desktop.filter(
         (img) => !updateData.images.desktop.includes(img),
       );
-      await Promise.all(removedDesktop.map(deleteImageFile));
+      await Promise.all(removedDesktop.map(deleteFromCloudinary));
     }
     if (newImages.mobile.length > 0) {
-      await Promise.all(product.images.mobile.map(deleteImageFile));
+      await Promise.all(product.images.mobile.map(deleteFromCloudinary));
     }
 
     // 🆕 Jo variant images final set me nahi rahi, unki files delete karo
@@ -650,8 +720,14 @@ export const updateProduct = async (req, res) => {
       const removedVariantImages = (product.variants || [])
         .flatMap((v) => v.images || [])
         .filter((img) => img && !finalVariantImages.has(img));
-      await Promise.all(removedVariantImages.map(deleteImageFile));
+      await Promise.all(removedVariantImages.map(deleteFromCloudinary));
     }
+
+    // 🆕 Variant uploads jo kisi row me assign nahi hui — Cloudinary se hatao
+    await deleteUnassignedVariantUploads(
+      req.files?.variantImages,
+      updateData.variants,
+    );
 
     return res.status(200).json({
       message: "Product updated successfully",
@@ -660,7 +736,7 @@ export const updateProduct = async (req, res) => {
   } catch (error) {
     console.error("Update Product Error:", error);
     const uploadedPaths = getUploadedFilesPaths(req.files);
-    await Promise.all(uploadedPaths.map((img) => deleteImageFile(img)));
+    await Promise.all(uploadedPaths.map((img) => deleteFromCloudinary(img)));
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
@@ -679,7 +755,7 @@ export const restoreProduct = async (req, res) => {
     const product = await Product.findByIdAndUpdate(
       id,
       { isActive: true },
-      { new: true },
+      { returnDocument: "after" },
     );
 
     if (!product) {
@@ -737,7 +813,7 @@ export const deleteProduct = async (req, res) => {
    (ek hi file me mixed categories bhi upload ho sakti hain).
 
    Required columns : name, description, price, stock, images
-   Optional columns : brand, subCategory, discountPrice, sku,
+   Optional columns : brand, gender, discountPrice, sku,
                       mobileImages, category_name, isActive
 
    - slug naam se auto-generate (+ uniqueness suffix)
@@ -885,14 +961,15 @@ export const bulkCreateProducts = async (req, res) => {
         rowCategoryId = matched;
       }
 
-      // --- Sub-category (multi) - "Men", "Women" ya comma-separated "Men,Women" ---
-      const subCategory = (row.subcategory || "")
+      // --- Gender - "Men", "Women" ya comma-separated "Men,Women" ---
+      // (purana 'subcategory' column bhi backward-compat ke liye accept)
+      const genders = (row.gender ?? row.subcategory ?? "")
         .split(",")
         .map((v) => v.trim())
         .filter((v) => v === "Men" || v === "Women");
-      if ((row.subcategory || "").trim() && subCategory.length === 0)
+      if ((row.gender ?? row.subcategory ?? "").trim() && genders.length === 0)
         return fail(
-          "'subCategory' must be Men, Women or comma-separated (Men,Women)",
+          "'gender' must be Men, Women or comma-separated (Men,Women)",
         );
 
       // --- SKU: diya gaya ho to uniqueness check, warna auto-generate ---
@@ -911,25 +988,34 @@ export const bulkCreateProducts = async (req, res) => {
       const baseSlug = slugify(name);
       if (!baseSlug) return fail("Name se valid slug generate nahi ho paya");
 
-      docs.push({
+      const doc = {
         categoryId: rowCategoryId,
         name,
         slug: uniqueSlug(baseSlug),
         description,
         brand: (row.brand || "").trim(),
-        subCategory: subCategory.length ? subCategory : ["Men"],
+        gender: genders.length ? genders : ["Men"],
         images: { desktop, mobile },
         price,
         discountPrice,
         sku,
         stock,
         isActive: toBool(row.isactive, true),
-      });
+      };
+
+      docs.push({ row: rowNo, name, doc });
     });
 
+    // Model rules (name 3-200 chars etc.) — insertMany ordered:false invalid
+    // docs chupchaap drop kar deta, isliye insert se pehle check karke report karo
+    const { validDocs, invalidRows: modelInvalidRows } =
+      await splitByModelValidation(Product, docs);
+    invalidRows.push(...modelInvalidRows);
+    invalidRows.sort((a, b) => a.row - b.row);
+
     let inserted = [];
-    if (docs.length) {
-      inserted = await Product.insertMany(docs, { ordered: false });
+    if (validDocs.length) {
+      inserted = await Product.insertMany(validDocs, { ordered: false });
     }
 
     return res.status(200).json({
@@ -944,6 +1030,64 @@ export const bulkCreateProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("Bulk Create Products Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   QUICK UPDATE PRODUCT STOCK (Admin Only)
+   PATCH /api/products/admin/:id/stock
+   Body: { stock?: number, delta?: number }
+========================================================= */
+export const updateProductStock = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { stock, delta } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid product ID" });
+    }
+
+    const hasStock =
+      stock !== undefined && stock !== null && stock !== "" && !isNaN(Number(stock));
+    const hasDelta =
+      delta !== undefined && delta !== null && delta !== "" && !isNaN(Number(delta));
+    if (!hasStock && !hasDelta) {
+      return res.status(400).json({ message: "Please provide valid stock or delta" });
+    }
+
+    // 🛠️ Atomic update — read-modify-write nahi. Delta seedha DB ke current
+    // stock par lagta hai, taaki beech me aaye order ka $inc overwrite na ho.
+    const update = hasStock
+      ? { $set: { stock: Math.max(0, Math.floor(Number(stock))) } }
+      : [
+          {
+            $set: {
+              stock: {
+                $max: [
+                  0,
+                  { $add: [{ $ifNull: ["$stock", 0] }, Math.floor(Number(delta))] },
+                ],
+              },
+            },
+          },
+        ];
+
+    const updatedProduct = await Product.findByIdAndUpdate(id, update, {
+      returnDocument: "after",
+      updatePipeline: !hasStock,
+    });
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    return res.status(200).json({
+      message: `Stock updated successfully for ${updatedProduct.name} (New Stock: ${updatedProduct.stock})`,
+      product: updatedProduct,
+    });
+  } catch (error) {
+    console.error("Update Product Stock Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

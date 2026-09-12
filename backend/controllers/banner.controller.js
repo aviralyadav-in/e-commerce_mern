@@ -1,24 +1,10 @@
-import fs from "fs/promises";
-import path from "path";
+import mongoose from "mongoose";
 import { Banner } from "../models/banner.model.js";
-import { bannerValidationSchema } from "../validators/bannerValidate.js";
-
-/* =========================================================
-   HELPER FUNCTION (Local File Delete Karne Ke Liye)
-========================================================= */
-const deleteImageFile = async (imagePath) => {
-  if (!imagePath) return;
-  if (imagePath.startsWith("http")) return; // External URL ko skip karein
-
-  try {
-    const filePath = path.join(process.cwd(), imagePath.replace(/^\/+/, ""));
-    await fs.unlink(filePath);
-  } catch (error) {
-    if (error.code !== "ENOENT") {
-      console.error("Delete Image File Error:", error);
-    }
-  }
-};
+import {
+  bannerValidationSchema,
+  updateBannerSchema,
+} from "../validators/bannerValidate.js";
+import { deleteFile as deleteFromCloudinary } from "../utils/storage.js";
 
 /* =========================================================
    1. CREATE BANNER
@@ -29,17 +15,16 @@ export const createBanner = async (req, res) => {
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
-    // 2. Multer se aayi image ko req.body.image me inject karein
-    if (req.file) {
-      req.body.image = `/uploads/banners/${req.file.filename}`; // Path apne hisab se adjust kar lena
-    }
+    // 2. Image sirf Multer upload se aati hai — body me bheji koi bhi URL string
+    // ignore (warna banner delete/replace par us URL ka asset Cloudinary se hat jata)
+    req.body.image = req.file ? req.file.path : undefined;
 
     // 3. Zod Validation
     const result = bannerValidationSchema.safeParse(req.body);
 
     if (!result.success) {
       // Validation fail hui toh nayi uploaded file delete karein
-      if (req.file) await deleteImageFile(req.body.image);
+      if (req.file) await deleteFromCloudinary(req.file.path);
 
       const formattedErrors = result.error.flatten().fieldErrors;
       return res.status(400).json({
@@ -58,7 +43,7 @@ export const createBanner = async (req, res) => {
   } catch (error) {
     console.error("Create Banner Error:", error);
     if (req.file)
-      await deleteImageFile(`/uploads/banners/${req.file.filename}`);
+      await deleteFromCloudinary(req.file.path);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -101,7 +86,13 @@ export const getBanners = async (req, res) => {
 ========================================================= */
 export const getBannerById = async (req, res) => {
   try {
-    const banner = await Banner.findById(req.params.id);
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid banner ID" });
+    }
+
+    const banner = await Banner.findById(id);
 
     if (!banner) {
       return res.status(404).json({ message: "Banner not found" });
@@ -124,11 +115,18 @@ export const updateBanner = async (req, res) => {
   try {
     const bannerId = req.params.id;
 
+    // 🛠️ Invalid ObjectId → 400 (cast error 500 nahi)
+    if (!mongoose.Types.ObjectId.isValid(bannerId)) {
+      if (req.file)
+        await deleteFromCloudinary(req.file.path);
+      return res.status(400).json({ message: "Invalid banner ID" });
+    }
+
     // Check if banner exists before updating
     const existingBanner = await Banner.findById(bannerId);
     if (!existingBanner) {
       if (req.file)
-        await deleteImageFile(`/uploads/banners/${req.file.filename}`);
+        await deleteFromCloudinary(req.file.path);
       return res.status(404).json({ message: "Banner not found" });
     }
 
@@ -136,16 +134,17 @@ export const updateBanner = async (req, res) => {
     if (req.body.isActive === "true") req.body.isActive = true;
     if (req.body.isActive === "false") req.body.isActive = false;
 
-    // Agar update me nayi file upload hui hai, toh path set karein
+    // Image sirf nayi file upload se update hoti hai — body ki string ignore
+    delete req.body.image;
     if (req.file) {
-      req.body.image = `/uploads/banners/${req.file.filename}`;
+      req.body.image = req.file.path;
     }
 
-    // Use .partial() kyuki update me saari fields bhejni zaruri nahi
-    const result = bannerValidationSchema.partial().safeParse(req.body);
+    // Use updateBannerSchema (no default injection)
+    const result = updateBannerSchema.safeParse(req.body);
 
     if (!result.success) {
-      if (req.file) await deleteImageFile(req.body.image);
+      if (req.file) await deleteFromCloudinary(req.file.path);
       const formattedErrors = result.error.flatten().fieldErrors;
       return res.status(400).json({
         message: "Please fix the validation errors",
@@ -153,9 +152,15 @@ export const updateBanner = async (req, res) => {
       });
     }
 
+    // 🛠️ DEFAULT-LEAK GUARD — Sirf wahi fields update karo jo request me bheji gayi
+    const updateData = {};
+    Object.keys(result.data).forEach((key) => {
+      if (req.body[key] !== undefined) updateData[key] = result.data[key];
+    });
+
     const updatedBanner = await Banner.findByIdAndUpdate(
       bannerId,
-      { $set: result.data },
+      { $set: updateData },
       { returnDocument: "after", runValidators: true },
     );
 
@@ -165,7 +170,7 @@ export const updateBanner = async (req, res) => {
       existingBanner.image &&
       updatedBanner.image !== existingBanner.image
     ) {
-      await deleteImageFile(existingBanner.image);
+      await deleteFromCloudinary(existingBanner.image);
     }
 
     return res.status(200).json({
@@ -175,7 +180,7 @@ export const updateBanner = async (req, res) => {
   } catch (error) {
     console.error("Update Banner Error:", error);
     if (req.file)
-      await deleteImageFile(`/uploads/banners/${req.file.filename}`);
+      await deleteFromCloudinary(req.file.path);
     return res.status(500).json({ message: "Internal server error" });
   }
 };
@@ -187,6 +192,10 @@ export const deleteBanner = async (req, res) => {
   try {
     const bannerId = req.params.id;
 
+    if (!mongoose.Types.ObjectId.isValid(bannerId)) {
+      return res.status(400).json({ message: "Invalid banner ID" });
+    }
+
     const banner = await Banner.findById(bannerId);
 
     if (!banner) {
@@ -196,9 +205,9 @@ export const deleteBanner = async (req, res) => {
     // Delete from DB
     await Banner.findByIdAndDelete(bannerId);
 
-    // Sath me local image file bhi delete karo
+    // Sath me image file bhi Cloudinary se delete karo
     if (banner.image) {
-      await deleteImageFile(banner.image);
+      await deleteFromCloudinary(banner.image);
     }
 
     return res.status(200).json({
@@ -206,6 +215,36 @@ export const deleteBanner = async (req, res) => {
     });
   } catch (error) {
     console.error("Delete Banner Error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+/* =========================================================
+   6. 🆕 TOGGLE BANNER STATUS (Admin Only)
+   PATCH /api/banners/:id/toggle-status
+========================================================= */
+export const toggleBannerStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid banner ID" });
+    }
+
+    const banner = await Banner.findById(id);
+    if (!banner) {
+      return res.status(404).json({ message: "Banner not found" });
+    }
+
+    banner.isActive = !banner.isActive;
+    await banner.save();
+
+    return res.status(200).json({
+      message: `Banner status changed to ${banner.isActive ? "Active" : "Inactive"}`,
+      banner,
+    });
+  } catch (error) {
+    console.error("Toggle Banner Status Error:", error);
     return res.status(500).json({ message: "Internal server error" });
   }
 };

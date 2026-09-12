@@ -1,12 +1,12 @@
 import { z } from "zod";
 
-export const bannerValidationSchema = z.object({
+export const baseBannerSchema = z.object({
   title: z
     .string({
       error: "Banner title is required",
     })
     .trim()
-    .min(1, "Banner title is required") // Taaki khali space pass na ho
+    .min(1, "Banner title is required")
     .max(100, "Title cannot exceed 100 characters"),
 
   subtitle: z
@@ -15,8 +15,7 @@ export const bannerValidationSchema = z.object({
     })
     .trim()
     .max(200, "Subtitle cannot exceed 200 characters")
-    .optional()
-    .default(""),
+    .optional(),
 
   image: z
     .string({
@@ -29,37 +28,43 @@ export const bannerValidationSchema = z.object({
       error: "Link URL must be a string",
     })
     .trim()
-    .optional()
-    .default(""),
+    .optional(),
 
-  // Form-data (multer) se data aane par numbers string ban jate hain,
-  // isliye z.coerce.number() use karna best hai taaki wo automatically number me convert ho jaye.
   sortOrder: z.coerce
     .number({
       error: "Sort order must be a number",
     })
-    .optional()
-    .default(0),
+    .min(0, "Sort order cannot be negative")
+    .optional(),
 
   isActive: z
     .boolean({
       error: "isActive must be a boolean",
     })
-    .optional()
-    .default(true),
+    .optional(),
 
-  // 🆕 Multi-page promo — kis page par, kahan dikhe
   page: z
     .enum(["home", "shop", "wishlist"], {
       error: "Page must be home, shop, or wishlist",
     })
-    .optional()
-    .default("home"),
+    .optional(),
 
   position: z
     .enum(["after-hero", "after-products"], {
       error: "Position must be after-hero or after-products",
     })
-    .optional()
-    .default("after-hero"),
+    .optional(),
 });
+
+// Full schema with defaults for creation
+export const bannerValidationSchema = baseBannerSchema.extend({
+  subtitle: baseBannerSchema.shape.subtitle.default(""),
+  linkUrl: baseBannerSchema.shape.linkUrl.default(""),
+  sortOrder: baseBannerSchema.shape.sortOrder.default(0),
+  isActive: baseBannerSchema.shape.isActive.default(true),
+  page: baseBannerSchema.shape.page.default("home"),
+  position: baseBannerSchema.shape.position.default("after-hero"),
+});
+
+// Partial schema WITHOUT defaults for clean updates
+export const updateBannerSchema = baseBannerSchema.partial();

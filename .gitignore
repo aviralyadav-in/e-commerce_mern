@@ -1,6 +1,5 @@
 backend/.env
-storefront/
-website/
-backend-test.log
+frontend/.env
 PROJECT_CONTEXT.md
-Stalefunc.md
+node_modules
+backend/uploads/

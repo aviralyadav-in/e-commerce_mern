@@ -45,6 +45,12 @@ const orderSchema = new mongoose.Schema(
       required: true,
       default: 0,
     },
+    // 🆕 COD convenience fee snapshot —
+    // totalAmount = itemsPrice − discountAmount + shippingPrice + codFee
+    codFee: {
+      type: Number,
+      default: 0,
+    },
     couponCode: {
       type: String,
       default: null,

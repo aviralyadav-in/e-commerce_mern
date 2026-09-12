@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   addProduct,
@@ -8,7 +8,15 @@ import useFormSync from "../../hooks/useFormSync";
 import { getAssetUrl } from "../../utils/assetUrl";
 import Drawer from "../common/Drawer";
 import { Field, FormAlert } from "../common/Field";
-import { CheckIcon, ImageIcon, PackageIcon, PlusIcon, XIcon } from "../common/Icon";
+import {
+  CheckCircleIcon,
+  CheckIcon,
+  ImageIcon,
+  LayersIcon,
+  PackageIcon,
+  PlusIcon,
+  XIcon,
+} from "../common/Icon";
 
 const MAX_IMAGES = 5;
 
@@ -39,8 +47,13 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
   const [isHidden, setIsHidden] = useState(false);
   const [stock, setStock] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  // 🆕 Cascading hierarchy selection levels
+  const [selectedMainId, setSelectedMainId] = useState("");
+  const [selectedSubId, setSelectedSubId] = useState("");
+  const [selectedSubChildId, setSelectedSubChildId] = useState("");
+
   // Multi-select — ek product Men + Women dono ke liye ho sakta hai
-  const [subCategories, setSubCategories] = useState(["Men"]);
+  const [gender, setGender] = useState(["Men"]);
   // 🆕 Collections — Collections section (categories) se dynamic multi-select
   const [selectedCollections, setSelectedCollections] = useState([]);
   const [existingImages, setExistingImages] = useState([]);
@@ -52,11 +65,84 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
 
   const totalImageCount = existingImages.length + newImages.length;
 
-  const selectedCategory = categories.find((c) => c._id === categoryId);
-  // Sirf Men / Women — ab multi-select (ek product dono ke liye ho sakta hai)
-  const availableSubCategories = selectedCategory?.subCategories?.length
-    ? [...new Set(selectedCategory.subCategories)]
-    : ["Men", "Women"];
+  // -------------------------------------------------------------
+  // Hierarchy Helpers (Level 1 Root -> Level 2 Child -> Level 3 Sub-Child)
+  // -------------------------------------------------------------
+  const parentMap = useMemo(() => {
+    return new Map(
+      categories.map((c) => [
+        String(c._id),
+        c.parentId ? String(c.parentId._id || c.parentId) : null,
+      ]),
+    );
+  }, [categories]);
+
+  const pathOf = (id) => {
+    const parts = [];
+    let cur = id ? String(id) : null;
+    const seen = new Set();
+    while (cur && !seen.has(cur)) {
+      seen.add(cur);
+      const cat = categories.find((c) => String(c._id) === cur);
+      if (!cat) break;
+      parts.unshift(cat);
+      cur = parentMap.get(cur);
+    }
+    return parts;
+  };
+
+  // Main Categories (Root / Level 1)
+  const mainCategories = useMemo(() => {
+    return categories
+      .filter((c) => {
+        const pid = c.parentId ? String(c.parentId._id || c.parentId) : null;
+        return !pid;
+      })
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  }, [categories]);
+
+  // Sub-Categories (Level 2) under selected Main Category
+  const availableSubCategories = useMemo(() => {
+    if (!selectedMainId) return [];
+    return categories
+      .filter((c) => {
+        const pid = c.parentId ? String(c.parentId._id || c.parentId) : null;
+        return pid === String(selectedMainId);
+      })
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  }, [categories, selectedMainId]);
+
+  // Sub-Child Categories (Level 3) under selected Sub-Category
+  const availableSubChildCategories = useMemo(() => {
+    if (!selectedSubId) return [];
+    return categories
+      .filter((c) => {
+        const pid = c.parentId ? String(c.parentId._id || c.parentId) : null;
+        return pid === String(selectedSubId);
+      })
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.name.localeCompare(b.name));
+  }, [categories, selectedSubId]);
+
+  const activeChain = useMemo(() => {
+    return pathOf(categoryId);
+  }, [categoryId, categories, parentMap]);
+
+  const mainCategoryObj = categories.find((c) => String(c._id) === String(selectedMainId));
+  const subCategoryObj = categories.find((c) => String(c._id) === String(selectedSubId));
+  const subChildCategoryObj = categories.find((c) => String(c._id) === String(selectedSubChildId));
+
+  // Category gender options - inherits up ancestor chain if needed
+  const categoryGenders = useMemo(() => {
+    const chain = pathOf(categoryId);
+    for (let i = chain.length - 1; i >= 0; i--) {
+      const g = chain[i]?.gender ?? chain[i]?.subCategories;
+      if (Array.isArray(g) && g.length > 0) {
+        const filtered = g.filter((x) => ["Men", "Women"].includes(x));
+        if (filtered.length > 0) return [...new Set(filtered)];
+      }
+    }
+    return ["Men", "Women"];
+  }, [categoryId, categories, parentMap]);
 
   // 🆕 Collections section ke active collections — product form me dynamically
   // yahi dikhenge (koi hardcoded options nahi).
@@ -69,9 +155,9 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
         : [...prev, collectionId],
     );
 
-  // Sub-category multi-select toggle - Men + Women dono select ho sakte hain
-  const toggleSubCategory = (value) =>
-    setSubCategories((prev) =>
+  // Gender multi-select toggle - Men + Women dono select ho sakte hain
+  const toggleGender = (value) =>
+    setGender((prev) =>
       prev.includes(value) ? prev.filter((s) => s !== value) : [...prev, value],
     );
 
@@ -91,15 +177,41 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
         setBrand(editData.brand || "");
         setIsHidden(editData.isActive === false);
         setStock(editData.stock || "");
-        setCategoryId(editData.categoryId?._id || editData.categoryId || "");
-        // Purane products ki subCategory string ho sakti hai - array me
+
+        const rawCatId = String(editData.categoryId?._id || editData.categoryId || "");
+        const chain = pathOf(rawCatId);
+        if (chain.length >= 3) {
+          setSelectedMainId(String(chain[0]._id));
+          setSelectedSubId(String(chain[1]._id));
+          setSelectedSubChildId(String(chain[2]._id));
+          setCategoryId(String(chain[2]._id));
+        } else if (chain.length === 2) {
+          setSelectedMainId(String(chain[0]._id));
+          setSelectedSubId(String(chain[1]._id));
+          setSelectedSubChildId("");
+          setCategoryId(String(chain[1]._id));
+        } else if (chain.length === 1) {
+          setSelectedMainId(String(chain[0]._id));
+          setSelectedSubId("");
+          setSelectedSubChildId("");
+          setCategoryId(String(chain[0]._id));
+        } else {
+          setSelectedMainId(rawCatId);
+          setSelectedSubId("");
+          setSelectedSubChildId("");
+          setCategoryId(rawCatId);
+        }
+
+        // Purane products ki gender string ho sakti hai - array me
         // normalize karo; invalid values (jaise 'Unisex') filter ho jayengi
-        const seededSubs = Array.isArray(editData.subCategory)
-          ? editData.subCategory.filter((s) => ["Men", "Women"].includes(s))
-          : ["Men", "Women"].includes(editData.subCategory)
-            ? [editData.subCategory]
+        // Purana field 'subCategory' bhi fallback — unmigrated data ke liye
+        const legacyGender = editData.gender ?? editData.subCategory;
+        const seededSubs = Array.isArray(legacyGender)
+          ? legacyGender.filter((s) => ["Men", "Women"].includes(s))
+          : ["Men", "Women"].includes(legacyGender)
+            ? [legacyGender]
             : [];
-        setSubCategories(seededSubs.length ? seededSubs : ["Men"]);
+        setGender(seededSubs.length ? seededSubs : ["Men"]);
         setSelectedCollections(toCollectionIds(editData.collections));
         setExistingImages(editData.images?.desktop || []);
         setNewImages([]);
@@ -118,8 +230,14 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
         setBrand("");
         setIsHidden(false);
         setStock("");
-        setCategoryId(categories.length > 0 ? categories[0]._id : "");
-        setSubCategories(["Men"]);
+
+        const defaultMain = mainCategories[0]?._id ? String(mainCategories[0]._id) : "";
+        setSelectedMainId(defaultMain);
+        setSelectedSubId("");
+        setSelectedSubChildId("");
+        setCategoryId(defaultMain);
+
+        setGender(["Men"]);
         setSelectedCollections([]);
         setExistingImages([]);
         setNewImages([]);
@@ -168,9 +286,9 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
 
     if (!cat) errs.categoryId = "Please select a category.";
 
-    // Sub-category - kam se kam ek select karna zaroori
-    if (subCategories.length === 0)
-      errs.subCategory = "Select at least one sub-category (Men or Women).";
+    // Gender - kam se kam ek select karna zaroori
+    if (gender.length === 0)
+      errs.gender = "Select at least one gender (Men or Women).";
 
     if (p === "" || p === null || p === undefined)
       errs.price = "Price is required.";
@@ -325,23 +443,29 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
 
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 
-  /**
-   * Category dropdown options with hierarchy paths (e.g. "Bags › Laptop
-   * Bags"), sorted alphabetically — same treatment as the category form.
-   */
-  const categoryOptions = (() => {
-    const namesById = new Map(categories.map((c) => [String(c._id), c.name]));
-    return categories
-      .map((c) => {
-        const pid = c.parentId ? String(c.parentId._id || c.parentId) : null;
-        const parentName = pid ? namesById.get(pid) : null;
-        return {
-          id: String(c._id),
-          label: parentName ? `${parentName} › ${c.name}` : c.name,
-        };
-      })
-      .sort((a, b) => a.label.localeCompare(b.label));
-  })();
+  // Cascading hierarchy handlers
+  const handleMainChange = (newMainId) => {
+    setSelectedMainId(newMainId);
+    setSelectedSubId("");
+    setSelectedSubChildId("");
+    setCategoryId(newMainId);
+    revalidate("categoryId", newMainId);
+  };
+
+  const handleSubChange = (newSubId) => {
+    setSelectedSubId(newSubId);
+    setSelectedSubChildId("");
+    const effective = newSubId || selectedMainId;
+    setCategoryId(effective);
+    revalidate("categoryId", effective);
+  };
+
+  const handleSubChildChange = (newSubChildId) => {
+    setSelectedSubChildId(newSubChildId);
+    const effective = newSubChildId || selectedSubId || selectedMainId;
+    setCategoryId(effective);
+    revalidate("categoryId", effective);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -352,7 +476,7 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
       discountPrice: true,
       stock: true,
       categoryId: true,
-      subCategory: true,
+      gender: true,
       images: true,
     });
     const errs = validate();
@@ -374,7 +498,7 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
     formData.append("brand", brand);
     formData.append("stock", Number(stock));
     formData.append("categoryId", categoryId);
-    formData.append("subCategory", JSON.stringify(subCategories));
+    formData.append("gender", JSON.stringify(gender));
     // Visibility aur stock alag concepts hain
     formData.append("isActive", !isHidden);
     // 🆕 Collections — Collections section se chune gaye ids (JSON array)
@@ -510,83 +634,191 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
           />
         </Field>
 
-        <div className="form-row">
-          <Field
-            label="Category"
-            required
-            htmlFor="prod-category"
-            error={err("categoryId")}
-          >
-            <select
-              id="prod-category"
-              value={categoryId}
-              onChange={(e) => {
-                setCategoryId(e.target.value);
-                const cat = categories.find((c) => c._id === e.target.value);
-                const allowed = cat?.subCategories?.length
-                  ? [...new Set(cat.subCategories)]
-                  : ["Men", "Women"];
-                // Naye category ke allowed options ke hisaab se selection filter
-                const filteredSubs = subCategories.filter((s) =>
-                  allowed.includes(s),
-                );
-                if (filteredSubs.length === 0) {
-                  setSubCategories(allowed.slice(0, 1));
-                } else if (filteredSubs.length !== subCategories.length) {
-                  setSubCategories(filteredSubs);
-                }
-                revalidate("categoryId", e.target.value);
-              }}
-              onBlur={() => handleBlur("categoryId", categoryId)}
-              className={`form-select ${invalid("categoryId")}`}
-            >
-              <option value="" disabled>
-                Select a category
-              </option>
-              {categoryOptions.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-          </Field>
-
-          <Field
-            label="Sub-category"
-            required
-            hint="Pick every audience that applies — options come from the selected category."
-            error={touched.subCategory ? errors.subCategory : undefined}
-          >
-            <div className="flex flex-wrap gap-2">
-              {availableSubCategories.map((opt) => {
-                const checked = subCategories.includes(opt);
-                return (
-                  <label
-                    key={opt}
-                    className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                      checked
-                        ? "border-amber-500 bg-amber-50 font-semibold text-amber-700"
-                        : "border-(--border) bg-(--surface-sunken) text-zinc-600 hover:border-amber-400"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleSubCategory(opt)}
-                      className="h-4 w-4 accent-amber-500"
-                    />
-                    {opt}
-                  </label>
-                );
-              })}
+        {/* 🆕 CASCADING CATEGORY HIERARCHY SELECTOR (Main -> Sub -> Sub-Child) */}
+        <div className="rounded-xl border border-(--border) bg-(--surface-sunken)/40 p-3.5 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-(--brand-soft) text-(--brand)">
+                <LayersIcon className="w-3.5 h-3.5" />
+              </span>
+              <span className="text-xs font-bold uppercase tracking-wider text-(--ink)">
+                Category Hierarchy <span className="text-red-500">*</span>
+              </span>
             </div>
-          </Field>
+            {activeChain.length > 0 && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-(--brand) bg-(--brand-soft) px-2.5 py-0.5 rounded-full">
+                <CheckCircleIcon className="w-3 h-3 text-(--brand)" />
+                {activeChain.length === 1
+                  ? "Main Category"
+                  : activeChain.length === 2
+                    ? "Sub-Category"
+                    : "Sub-Child Category"}
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 1. Main Category (Level 1) */}
+            <div>
+              <label
+                htmlFor="main-cat-select"
+                className="mb-1 block text-[11.5px] font-semibold text-(--ink-soft)"
+              >
+                1. Main Category <span className="text-red-500">*</span>
+              </label>
+              <select
+                id="main-cat-select"
+                value={selectedMainId}
+                onChange={(e) => handleMainChange(e.target.value)}
+                onBlur={() => handleBlur("categoryId", categoryId)}
+                className={`form-select text-xs ${invalid("categoryId")}`}
+              >
+                <option value="" disabled>
+                  Select main category…
+                </option>
+                {mainCategories.map((c) => (
+                  <option key={c._id} value={c._id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 2. Sub-Category (Level 2) */}
+            <div>
+              <label
+                htmlFor="sub-cat-select"
+                className="mb-1 block text-[11.5px] font-semibold text-(--ink-soft)"
+              >
+                2. Sub-Category
+              </label>
+              {selectedMainId ? (
+                availableSubCategories.length > 0 ? (
+                  <select
+                    id="sub-cat-select"
+                    value={selectedSubId}
+                    onChange={(e) => handleSubChange(e.target.value)}
+                    className="form-select text-xs"
+                  >
+                    <option value="">
+                      All / None (keep &quot;{mainCategoryObj?.name}&quot;)
+                    </option>
+                    {availableSubCategories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex h-9 items-center rounded-(--radius) border border-dashed border-(--border) bg-(--surface-card) px-2.5 text-[11px] text-(--ink-muted)">
+                    No sub-categories
+                  </div>
+                )
+              ) : (
+                <div className="flex h-9 items-center rounded-(--radius) border border-dashed border-(--border) bg-(--surface-card) px-2.5 text-[11px] text-(--ink-faint)">
+                  Select Main first
+                </div>
+              )}
+            </div>
+
+            {/* 3. Sub-Child Category (Level 3) */}
+            <div>
+              <label
+                htmlFor="subchild-cat-select"
+                className="mb-1 block text-[11.5px] font-semibold text-(--ink-soft)"
+              >
+                3. Sub-Child Category
+              </label>
+              {selectedSubId ? (
+                availableSubChildCategories.length > 0 ? (
+                  <select
+                    id="subchild-cat-select"
+                    value={selectedSubChildId}
+                    onChange={(e) => handleSubChildChange(e.target.value)}
+                    className="form-select text-xs"
+                  >
+                    <option value="">
+                      All / None (keep &quot;{subCategoryObj?.name}&quot;)
+                    </option>
+                    {availableSubChildCategories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="flex h-9 items-center rounded-(--radius) border border-dashed border-(--border) bg-(--surface-card) px-2.5 text-[11px] text-(--ink-muted)">
+                    No sub-child categories
+                  </div>
+                )
+              ) : (
+                <div className="flex h-9 items-center rounded-(--radius) border border-dashed border-(--border) bg-(--surface-card) px-2.5 text-[11px] text-(--ink-faint)">
+                  {selectedMainId ? "Pick sub-category first" : "Select Main first"}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {err("categoryId") && (
+            <p className="text-[11.5px] font-medium text-rose-500">
+              {err("categoryId")}
+            </p>
+          )}
+
+          {/* Live Hierarchy Breadcrumb */}
+          {activeChain.length > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border border-(--brand-soft-border) bg-(--brand-soft) px-3 py-2 text-xs flex-wrap">
+              <span className="font-semibold text-(--brand)">Filing under:</span>
+              <div className="flex items-center gap-1.5 font-bold text-(--ink) flex-wrap">
+                {activeChain.map((cat, idx) => (
+                  <span key={cat._id} className="flex items-center gap-1.5">
+                    {idx > 0 && <span className="text-(--ink-faint) font-normal">›</span>}
+                    <span className={idx === activeChain.length - 1 ? "text-(--brand)" : ""}>
+                      {cat.name}
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* Gender / Segment Selection */}
+        <Field
+          label="Gender"
+          required
+          hint="Pick every gender that applies — options automatically adapt based on your selected category."
+          error={touched.gender ? errors.gender : undefined}
+        >
+          <div className="flex flex-wrap gap-2">
+            {categoryGenders.map((opt) => {
+              const checked = gender.includes(opt);
+              return (
+                <label
+                  key={opt}
+                  className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                    checked
+                      ? "border-(--brand) bg-(--brand-soft) font-semibold text-(--brand)"
+                      : "border-(--border) bg-(--surface-sunken) text-(--ink-soft) hover:border-(--brand)"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggleGender(opt)}
+                    className="h-4 w-4 accent-(--brand)"
+                  />
+                  {opt}
+                </label>
+              );
+            })}
+          </div>
+        </Field>
 
         {/* 🆕 Collections — options Collections section se dynamically aate hain */}
         <div className="form-row">
           <div>
-            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-400">
+            <span className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-(--ink-faint)">
               Collections
             </span>
             {activeCollections.length > 0 ? (
@@ -598,15 +830,15 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
                       key={col._id}
                       className={`flex cursor-pointer items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors ${
                         checked
-                          ? "border-amber-500 bg-amber-50 font-semibold text-amber-700"
-                          : "border-(--border) bg-(--surface-sunken) text-zinc-600 hover:border-amber-400"
+                          ? "border-(--brand) bg-(--brand-soft) font-semibold text-(--brand)"
+                          : "border-(--border) bg-(--surface-sunken) text-(--ink-soft) hover:border-(--brand)"
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleCollection(col._id)}
-                        className="h-4 w-4 accent-amber-500"
+                        className="h-4 w-4 accent-(--brand)"
                       />
                       {col.name}
                     </label>
@@ -614,12 +846,12 @@ const ProductModal = ({ isOpen, onClose, editData }) => {
                 })}
               </div>
             ) : (
-              <p className="rounded-(--radius) border border-dashed border-(--border) bg-(--surface-sunken) px-3 py-2.5 text-xs text-zinc-500">
+              <p className="rounded-(--radius) border border-dashed border-(--border) bg-(--surface-sunken) px-3 py-2.5 text-xs text-(--ink-muted)">
                 No collections yet — create one in the Collections section and
                 it will appear here automatically.
               </p>
             )}
-            <p className="mt-1.5 text-xs text-zinc-500">
+            <p className="mt-1.5 text-xs text-(--ink-muted)">
               These options come from your Collections section — a product can
               belong to multiple collections. They power the &quot;Collections&quot;
               filter on the shop page.

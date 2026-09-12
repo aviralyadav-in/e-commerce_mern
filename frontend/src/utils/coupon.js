@@ -4,8 +4,12 @@
 
 export const isExpired = (date) => !!date && new Date(date) < new Date();
 
-/** A coupon is only usable when it is switched on AND still in date. */
+export const isExhausted = (coupon) =>
+  coupon?.usageLimit != null && (coupon?.usedCount || 0) >= coupon?.usageLimit;
+
+/** A coupon is only usable when switched on, in date, and under its usage limit. */
 export const couponState = (coupon) => {
-  if (isExpired(coupon.expiryDate)) return "expired";
-  return coupon.isActive ? "active" : "paused";
+  if (isExpired(coupon?.expiryDate)) return "expired";
+  if (isExhausted(coupon)) return "exhausted";
+  return coupon?.isActive ? "active" : "paused";
 };

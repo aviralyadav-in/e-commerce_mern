@@ -27,8 +27,8 @@ const categorySchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-    // Men / Women sub-categories under this category
-    subCategories: {
+    // Men / Women genders under this category
+    gender: {
       type: [
         {
           type: String,
@@ -40,7 +40,7 @@ const categorySchema = new mongoose.Schema(
         validator: function (val) {
           return Array.isArray(val) && val.length > 0;
         },
-        message: "Select at least one sub-category (Men or Women).",
+        message: "Select at least one gender (Men or Women).",
       },
     },
     isActive: {
@@ -54,10 +54,36 @@ const categorySchema = new mongoose.Schema(
       ref: "Category",
       default: null,
     },
+
+    // 🆕 Manual ordering — chhota number pehle dikhega (admin tree + list)
+    sortOrder: {
+      type: Number,
+      default: 0,
+      min: [0, "Sort order cannot be negative"],
+    },
+
+    // 🆕 Hierarchy meta — computed fields (parent change par controller
+    // recompute karta hai). level: 0 = root, 1 = child, 2 = sub-child.
+    level: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 2,
+    },
+    // Materialized path — "rootId/childId/selfId" — fast tree building,
+    // breadcrumbs aur descendant queries ke liye.
+    path: {
+      type: String,
+      default: "",
+      index: true,
+    },
   },
   {
     timestamps: true,
   },
 );
+
+// 🆕 Parent-based tree queries fast karne ke liye
+categorySchema.index({ parentId: 1 });
 
 export const Category = mongoose.model("Category", categorySchema);

@@ -14,10 +14,12 @@ import { formatDate, initials } from "../../utils/format";
 import {
   CheckIcon,
   EyeOffIcon,
+  EyeIcon,
   StarIcon,
   StarFilledIcon,
   TrashIcon,
 } from "../common/Icon";
+import { notifySuccess, notifyError } from "../../lib/toast";
 
 export const StarRow = ({ rating = 0, size = "w-3.5 h-3.5" }) => (
   <div className="flex items-center gap-0.5" aria-label={`${rating} out of 5`}>
@@ -25,7 +27,7 @@ export const StarRow = ({ rating = 0, size = "w-3.5 h-3.5" }) => (
       n <= rating ? (
         <StarFilledIcon key={n} className={`${size} text-amber-400`} />
       ) : (
-        <StarIcon key={n} className={`${size} text-gray-300`} />
+        <StarIcon key={n} className={`${size} text-(--border-strong)`} />
       ),
     )}
   </div>
@@ -38,9 +40,10 @@ const ACCESSORS = {
   date: (r) => (r.createdAt ? new Date(r.createdAt).getTime() : null),
 };
 
-const ReviewTable = ({ reviews }) => {
+const ReviewTable = ({ reviews, onView }) => {
   const dispatch = useDispatch();
   const [deleteTarget, setDeleteTarget] = useState(null);
+  const [updatingId, setUpdatingId] = useState(null);
 
   const table = useTableControls(reviews, {
     accessors: ACCESSORS,
@@ -48,9 +51,26 @@ const ReviewTable = ({ reviews }) => {
     pageSize: 10,
   });
 
-  const handleConfirmDelete = () => {
+  const handleStatusChange = async (review, newStatus) => {
+    setUpdatingId(review._id);
+    try {
+      await dispatch(
+        updateReviewStatus({ id: review._id, status: newStatus }),
+      ).unwrap();
+    } catch {
+      // toastMiddleware handles user notification
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    dispatch(deleteReview(deleteTarget._id));
+    try {
+      await dispatch(deleteReview(deleteTarget._id)).unwrap();
+    } catch {
+      // toastMiddleware handles user notification
+    }
     setDeleteTarget(null);
   };
 
@@ -79,7 +99,7 @@ const ReviewTable = ({ reviews }) => {
                   sort={table.sort}
                   onSort={table.toggleSort}
                 />
-                <th scope="col">Comment</th>
+                <th scope="col">Review Feedback</th>
                 <th scope="col">Status</th>
                 <SortableTh
                   label="Date"
@@ -98,19 +118,35 @@ const ReviewTable = ({ reviews }) => {
                   const productImg =
                     review.product?.images?.desktop?.[0] ||
                     review.product?.images?.mobile?.[0];
+                  const status = review.status || "Pending";
+                  const isPending = status === "Pending";
+
                   return (
-                    <tr key={review._id} className="hover:bg-slate-50/80 transition-colors">
+                    <tr
+                      key={review._id}
+                      className="hover:bg-(--surface-sunken)/70 transition-colors"
+                    >
                       <td>
                         <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-700 font-bold text-[11px] flex items-center justify-center shrink-0 border border-indigo-100">
+                          <div className="w-8 h-8 rounded-full bg-linear-to-tr from-indigo-50 to-slate-100 dark:from-indigo-950 dark:to-slate-800 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] flex items-center justify-center shrink-0 border border-indigo-100 dark:border-indigo-800 shadow-xs">
                             {initials(review.user?.name)}
                           </div>
                           <div className="min-w-0">
-                            <p className="cell-strong truncate max-w-40 text-[13px]">
-                              {review.user?.name || "Customer"}
-                            </p>
-                            <span className="cell-sub truncate max-w-40 text-slate-400 text-[11px]">
-                              {review.user?.email || "Verified Buyer"}
+                            <div className="flex items-center gap-1.5">
+                              <p className="cell-strong truncate max-w-36 text-[13px] text-(--ink)">
+                                {review.user?.name || "Customer"}
+                              </p>
+                              {review.verifiedPurchase && (
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.2 rounded text-[9.5px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shrink-0"
+                                  title="Verified Purchase — Customer ordered this product"
+                                >
+                                  Verified
+                                </span>
+                              )}
+                            </div>
+                            <span className="cell-sub truncate max-w-40 text-(--ink-muted) text-[11px] block">
+                              {review.user?.email || "—"}
                             </span>
                           </div>
                         </div>
@@ -120,10 +156,10 @@ const ReviewTable = ({ reviews }) => {
                           <Thumb
                             src={productImg}
                             alt={review.product?.name}
-                            className="w-9 h-9"
-                            rounded="rounded-lg"
+                            className="w-9 h-9 shrink-0"
+                            rounded="rounded-(--radius-sm)"
                           />
-                          <p className="cell-strong truncate max-w-45 text-[12.5px]">
+                          <p className="cell-strong truncate max-w-45 text-[12.5px] text-(--ink)">
                             {review.product?.name || "Product item"}
                           </p>
                         </div>
@@ -131,69 +167,80 @@ const ReviewTable = ({ reviews }) => {
                       <td className="whitespace-nowrap">
                         <div className="space-y-0.5">
                           <StarRow rating={review.rating} />
-                          <span className="cell-sub font-bold text-slate-800 text-[11.5px]">
+                          <span className="cell-sub font-bold text-(--ink) text-[11.5px]">
                             {review.rating} of 5 stars
                           </span>
                         </div>
                       </td>
                       <td className="max-w-65">
-                        <p className="line-clamp-2 text-slate-600 text-[12.5px] italic">
-                          "{review.comment || review.review || "No written review"}"
+                        <p
+                          onClick={() => onView?.(review)}
+                          className="line-clamp-2 text-(--ink-soft) text-[12.5px] cursor-pointer hover:text-(--brand) transition-colors"
+                          title="Click to view full review feedback"
+                        >
+                          &ldquo;{review.comment || review.review || "No written review"}&rdquo;
                         </p>
                       </td>
                       <td>
                         <span
                           className={`badge ${
-                            review.status === "Approved"
+                            status === "Approved"
                               ? "badge-success"
-                              : review.status === "Pending"
+                              : status === "Pending"
                                 ? "badge-warning"
                                 : "badge-neutral"
                           }`}
                         >
                           <span className="badge-dot" />
-                          {review.status || "Pending"}
+                          {status}
                         </span>
                       </td>
-                      <td className="whitespace-nowrap text-slate-500 text-[12px]">
+                      <td className="whitespace-nowrap text-(--ink-muted) text-[12px]">
                         {formatDate(review.createdAt)}
                       </td>
                       <td className="text-right">
-                        <div className="flex justify-end gap-1.5">
-                          {review.status !== "Approved" && (
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isPending && (
                             <button
-                              onClick={() =>
-                                dispatch(
-                                  updateReviewStatus({
-                                    id: review._id,
-                                    status: "Approved",
-                                  }),
-                                )
-                              }
+                              disabled={updatingId === review._id}
+                              onClick={() => handleStatusChange(review, "Approved")}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11.5px] font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors cursor-pointer"
+                              title="Approve review (publish to product page)"
+                            >
+                              <CheckIcon className="w-3.5 h-3.5" />
+                              <span>Approve</span>
+                            </button>
+                          )}
+                          {!isPending && status !== "Approved" && (
+                            <button
+                              disabled={updatingId === review._id}
+                              onClick={() => handleStatusChange(review, "Approved")}
                               className="icon-btn icon-btn-view"
-                              title="Approve review"
-                              aria-label="Approve review"
+                              title="Re-Approve review"
+                              aria-label="Re-Approve review"
                             >
                               <CheckIcon className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          {review.status !== "Hidden" && (
+                          {status !== "Hidden" && (
                             <button
-                              onClick={() =>
-                                dispatch(
-                                  updateReviewStatus({
-                                    id: review._id,
-                                    status: "Hidden",
-                                  }),
-                                )
-                              }
-                              className="icon-btn icon-btn-edit"
-                              title="Hide review"
-                              aria-label="Hide review"
+                              disabled={updatingId === review._id}
+                              onClick={() => handleStatusChange(review, "Hidden")}
+                              className="icon-btn icon-btn-ghost"
+                              title="Hide from store"
+                              aria-label="Hide from store"
                             >
                               <EyeOffIcon className="w-3.5 h-3.5" />
                             </button>
                           )}
+                          <button
+                            onClick={() => onView?.(review)}
+                            className="icon-btn icon-btn-view"
+                            title="View full review details"
+                            aria-label="View review"
+                          >
+                            <EyeIcon className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             onClick={() => setDeleteTarget(review)}
                             className="icon-btn icon-btn-delete"
@@ -212,8 +259,8 @@ const ReviewTable = ({ reviews }) => {
                   <td colSpan="7" className="empty-cell">
                     <EmptyState
                       icon={<StarIcon className="w-5 h-5" />}
-                      title="No reviews yet"
-                      message="Customer reviews of your products will show up here once they start rating."
+                      title="No reviews found"
+                      message="Customer product reviews will show up here as shoppers leave ratings."
                     />
                   </td>
                 </tr>
@@ -237,15 +284,15 @@ const ReviewTable = ({ reviews }) => {
 
       <ConfirmDialog
         isOpen={!!deleteTarget}
-        title="Delete review?"
+        title="Delete customer review?"
         message={
           deleteTarget
-            ? `This permanently removes ${
+            ? `This will permanently delete ${
                 deleteTarget.user?.name || "the customer"
-              }'s review and recalculates the product's rating.`
+              }'s review for “${deleteTarget.product?.name || "this product"}” and recalculate the product's average rating.`
             : ""
         }
-        confirmLabel="Delete review"
+        confirmLabel="Yes, Delete Review"
         variant="danger"
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
