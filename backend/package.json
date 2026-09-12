@@ -23,6 +23,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "html-to-docx": "^1.8.0",
     "nodemon": "^3.1.14"
   }
 }
