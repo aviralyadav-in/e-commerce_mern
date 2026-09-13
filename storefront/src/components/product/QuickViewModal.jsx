@@ -26,6 +26,7 @@ import {
   getStockLabel,
   getVariantColor,
 } from "../../lib/utils";
+import { notifyWishlist } from "../../lib/toasts";
 
 const MAX_THUMBS = 6;
 const DEFAULT_DESCRIPTION =
@@ -327,7 +328,10 @@ function QuickViewPanel({ product, onClose }) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => toggleWishlist(product)}
+                  onClick={async () => {
+                    const res = await toggleWishlist(product);
+                    notifyWishlist(product.name, res?.action !== "removed");
+                  }}
                   aria-pressed={isSaved}
                   aria-label={isSaved ? "Remove from wishlist" : "Add to wishlist"}
                   className={cn(

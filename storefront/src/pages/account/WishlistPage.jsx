@@ -115,6 +115,7 @@ export default function WishlistPage() {
           title="Your wishlist is empty"
           description="Tap the heart on any piece while you browse and it will be saved here for later."
           action={{ label: "Explore the collection", to: "/shop" }}
+          secondaryAction={{ label: "See new arrivals", to: "/shop?sort=createdAt&order=desc" }}
         />
       ) : (
         <ul className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 xl:grid-cols-4" aria-label="Saved products">

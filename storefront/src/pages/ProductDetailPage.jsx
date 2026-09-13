@@ -46,6 +46,7 @@ import FormField from "../components/common/FormField";
 import { Spinner } from "../components/common/PageLoader";
 import ProductCard from "../components/product/ProductCard";
 import usePageTitle from "../hooks/usePageTitle";
+import { notifyAddedToBag, notifyWishlist } from "../lib/toasts";
 
 const STOCK_PILL = { success: "pill-success", gold: "pill-stock", muted: "pill-out" };
 const REVIEWS_PAGE = 4;
@@ -654,13 +655,23 @@ function PdpContent({ id }) {
         variantName: selectedVariant?.name || null,
         quantity,
       });
-      if (mode === "buy" && res?.success) {
-        closeCart();
-        navigate("/checkout");
+      if (res?.success) {
+        if (mode === "buy") {
+          closeCart();
+          navigate("/checkout");
+        } else {
+          // The cart drawer opens itself on success — the toast confirms the action.
+          notifyAddedToBag(product.name);
+        }
       }
     } finally {
       setAdding(null);
     }
+  };
+
+  const handleToggleWishlist = async () => {
+    const res = await toggleWishlist(product);
+    notifyWishlist(product.name, res?.action !== "removed");
   };
 
   const cancelEdit = () => {
@@ -794,7 +805,7 @@ function PdpContent({ id }) {
             index={safeIndex}
             onSelect={setSelectedImageIndex}
             isSaved={isSaved}
-            onToggleWishlist={() => toggleWishlist(product)}
+            onToggleWishlist={handleToggleWishlist}
             discountPercent={discountPercent}
           />
         </div>
@@ -941,7 +952,7 @@ function PdpContent({ id }) {
             </button>
             <button
               type="button"
-              onClick={() => toggleWishlist(product)}
+              onClick={handleToggleWishlist}
               aria-pressed={isSaved}
               aria-label={isSaved ? "Remove from wishlist" : "Save to wishlist"}
               className={cn("btn btn-secondary btn-icon size-14 shrink-0", isSaved && "border-gold-ink text-gold-ink")}
@@ -1045,6 +1056,23 @@ function PdpContent({ id }) {
                   tags and dust bag intact.
                 </p>
               </div>
+            </PdpAccordion>
+            <PdpAccordion id="pdp-first-time" title="First time buying? How it works">
+              <ol className="max-w-prose space-y-2.5 text-body text-ink-muted">
+                {[
+                  "Add to bag — no account needed to browse or save pieces.",
+                  "Checkout securely with UPI, cards or cash on delivery.",
+                  "We handcraft and dispatch within 24–48 hours, then share tracking.",
+                  "Changed your mind? 7-day doorstep returns, no questions asked.",
+                ].map((step, i) => (
+                  <li key={step} className="flex items-start gap-3">
+                    <span className="price mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-gold-soft text-xs text-gold-ink" aria-hidden="true">
+                      {i + 1}
+                    </span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
             </PdpAccordion>
           </div>
         </div>

@@ -43,10 +43,10 @@ const CARE_LINKS = [
 ];
 
 const LEGAL_LINKS = [
-  { label: "Privacy", to: "/contact" },
-  { label: "Terms", to: "/contact" },
-  { label: "Shipping", to: "/contact" },
-  { label: "Refunds", to: "/contact" },
+  { label: "Privacy & legal policies", to: "/contact" },
+  { label: "Contact support", to: "/contact" },
+  { label: "Shipping & delivery", to: "/contact" },
+  { label: "Returns & refunds", to: "/contact" },
 ];
 
 const PAYMENT_METHODS = ["UPI", "Visa", "Mastercard", "COD"];

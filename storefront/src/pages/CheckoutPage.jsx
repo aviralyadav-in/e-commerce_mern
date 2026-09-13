@@ -17,12 +17,15 @@ import {
   ChevronDown,
   Truck,
   ClipboardList,
+  Copy,
+  Printer,
 } from "lucide-react";
 import { useAuthStore } from "../stores/authStore";
 import { useCartStore } from "../stores/cartStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { api } from "../lib/api";
 import { cn, formatCurrency, getProductImages, pluralize } from "../lib/utils";
+import { toast } from "sonner";
 import usePageTitle from "../hooks/usePageTitle";
 import PageHeader from "../components/common/PageHeader";
 import EmptyState from "../components/common/EmptyState";
@@ -233,6 +236,8 @@ export default function CheckoutPage() {
   const [couponOpen, setCouponOpen] = useState(false);
   const [summaryOpen, setSummaryOpen] = useState(false);
 
+  const orderId = confirmedOrder?._id || "";
+
   const items = cart?.items || [];
   const itemCount = items.reduce((s, it) => s + (it.quantity || 1), 0);
   const subtotal = cart?.totalPrice || 0;
@@ -351,6 +356,10 @@ export default function CheckoutPage() {
 
     try {
       setPlacingOrder(true);
+      toast.success("Placing your order…", {
+        id: "placing-order",
+        duration: 20000,
+      });
       const payload = {
         shippingAddress: selectedAddressId,
         orderItems: items.map((it) => ({
@@ -367,8 +376,13 @@ export default function CheckoutPage() {
         setConfirmedItems(items);
         setConfirmedOrder(res.data.order);
         clearCart();
+        toast.success("Order confirmed — a receipt has been saved to your account.", {
+          id: "placing-order",
+          duration: 5000,
+        });
       }
     } catch (err) {
+      toast.dismiss("placing-order");
       setOrderError(
         err.response?.data?.message || "Order placement failed. Please verify stock availability."
       );
@@ -436,12 +450,35 @@ export default function CheckoutPage() {
             Your order has been received and our atelier is preparing it with care. Estimated
             delivery: <span className="font-semibold text-foreground">{deliveryEta}</span>.
           </p>
-          <p className="mt-4 inline-flex flex-wrap items-center justify-center gap-2 text-small text-ink-muted">
-            <span>Order number</span>
-            <span className="rounded-lg bg-surface-2 px-2.5 py-1 font-mono text-xs font-semibold tracking-wide text-foreground">
-              #{confirmedOrder._id}
+          <p className="mt-4 text-small text-ink-muted">Order number — keep it for support & tracking</p>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-2">
+            <span className="rounded-lg bg-surface-2 px-3 py-1.5 font-mono text-sm font-semibold tracking-wide text-foreground">
+              #{orderId}
             </span>
-          </p>
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(orderId);
+                  toast.success("Order number copied");
+                } catch {
+                  toast.error("Could not copy — please note it down");
+                }
+              }}
+              className="btn btn-ghost btn-sm h-8 px-3"
+            >
+              <Copy className="size-3.5" aria-hidden="true" />
+              <span>Copy</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="btn btn-ghost btn-sm h-8 px-3"
+            >
+              <Printer className="size-3.5" aria-hidden="true" />
+              <span>Print / Save as PDF</span>
+            </button>
+          </div>
 
           <div className="surface-panel mt-8 p-5 text-left">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line pb-3">

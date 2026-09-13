@@ -16,6 +16,7 @@ import {
   getStockLabel,
   getVariantColor,
 } from "../../lib/utils";
+import { notifyAddedToBag, notifyWishlist } from "../../lib/toasts";
 
 const NEW_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_SWATCHES = 5;
@@ -166,10 +167,11 @@ export default function ProductCard({ product, onQuickView, layout = "grid", pri
   const brand = product.brand || "Niya Bags";
   const hasRating = Number(product.averageRating) > 0;
 
-  const handleWishlist = (e) => {
+  const handleWishlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    toggleWishlist(product);
+    const res = await toggleWishlist(product);
+    notifyWishlist(product.name, res?.action !== "removed");
   };
 
   const handleQuickView = (e) => {
@@ -184,7 +186,8 @@ export default function ProductCard({ product, onQuickView, layout = "grid", pri
     if (isOut || isAdding) return;
     try {
       setIsAdding(true);
-      await addToCart({ product, variantName: activeVariantName, quantity: 1 });
+      const res = await addToCart({ product, variantName: activeVariantName, quantity: 1 });
+      if (res?.success) notifyAddedToBag(product.name);
     } finally {
       setIsAdding(false);
     }

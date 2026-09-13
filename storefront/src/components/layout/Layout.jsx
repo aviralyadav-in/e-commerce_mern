@@ -5,6 +5,7 @@ import Header from "./Header";
 import Footer from "./Footer";
 import CartDrawer from "../cart/CartDrawer";
 import BackToTop from "../common/BackToTop";
+import ConciergeButton from "../common/ConciergeButton";
 import { Toaster } from "../ui/sonner";
 
 const TOAST_CLASSNAMES = {
@@ -41,6 +42,7 @@ export default function Layout() {
       <CartDrawer />
       <Footer />
       <BackToTop />
+      <ConciergeButton />
       <Toaster
         theme={theme === "dark" ? "dark" : "light"}
         position="top-center"
