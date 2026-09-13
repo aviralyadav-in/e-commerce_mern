@@ -3,3 +3,4 @@ frontend/.env
 PROJECT_CONTEXT.md
 node_modules
 backend/uploads/
+.freebuff/
