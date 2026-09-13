@@ -8,6 +8,8 @@ import Thumb from "../common/Thumb";
 import { getAssetUrl } from "../../utils/assetUrl";
 import { CheckIcon, ImageIcon, LayersIcon } from "../common/Icon";
 
+import { notifySuccess } from "../../lib/toast";
+
 const QUICK_LINK_PRESETS = [
   { label: "All Products", url: "/products" },
   { label: "New Arrivals", url: "/products?collections=new-arrivals" },
@@ -43,6 +45,7 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
       setPage(editData.page || "home");
       setPosition(editData.position || "after-hero");
       setImage(null);
+      setPreviewUrl(null);
     } else {
       setTitle("");
       setSubtitle("");
@@ -52,6 +55,7 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
       setPage("home");
       setPosition("after-hero");
       setImage(null);
+      setPreviewUrl(null);
     }
     setErrors({});
     setTouched({});
@@ -130,9 +134,17 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
       : addBanner(formData);
 
     dispatch(action).then((res) => {
-      if (!res.error) onClose();
+      if (!res.error) {
+        notifySuccess(
+          editData ? "Banner updated" : "Banner created",
+          `“${title.trim()}” saved successfully.`,
+        );
+        onClose();
+      }
     });
   };
+
+  if (!isOpen) return null;
 
   return (
     <Drawer
@@ -390,7 +402,7 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
               onBlur={() => handleBlur("image", image)}
               aria-label="Banner image"
             />
-            {previewUrl ? (
+            {previewUrl && image ? (
               <div className="flex flex-col items-center gap-2 w-full p-1">
                 <div className="relative w-full max-h-36 overflow-hidden rounded-lg border border-(--border)">
                   <img
@@ -404,7 +416,7 @@ const BannerModal = ({ isOpen, onClose, editData }) => {
                 </div>
                 <div className="text-center">
                   <p className="text-[12px] font-semibold text-(--ink) truncate max-w-xs">
-                    {image.name}
+                    {image?.name || "Selected file"}
                   </p>
                   <p className="text-[11px] text-(--brand) font-medium mt-0.5">
                     Click or drop another file to replace

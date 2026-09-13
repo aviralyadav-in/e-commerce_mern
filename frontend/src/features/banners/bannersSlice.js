@@ -116,7 +116,9 @@ const bannersSlice = createSlice({
       })
       .addCase(addBanner.fulfilled, (state, action) => {
         state.loading = false;
-        state.banners.push(action.payload);
+        if (action.payload) {
+          state.banners.push(action.payload);
+        }
       })
       .addCase(addBanner.rejected, (state, action) => {
         state.loading = false;
@@ -130,11 +132,13 @@ const bannersSlice = createSlice({
       })
       .addCase(updateBanner.fulfilled, (state, action) => {
         state.loading = false;
-        const index = state.banners.findIndex(
-          (b) => b._id === action.payload._id,
-        );
-        if (index !== -1) {
-          state.banners[index] = action.payload;
+        if (action.payload?._id) {
+          const index = state.banners.findIndex(
+            (b) => b?._id === action.payload._id,
+          );
+          if (index !== -1) {
+            state.banners[index] = action.payload;
+          }
         }
       })
       .addCase(updateBanner.rejected, (state, action) => {
@@ -149,7 +153,7 @@ const bannersSlice = createSlice({
       })
       .addCase(deleteBanner.fulfilled, (state, action) => {
         state.loading = false;
-        state.banners = state.banners.filter((b) => b._id !== action.payload);
+        state.banners = state.banners.filter((b) => b?._id !== action.payload);
       })
       .addCase(deleteBanner.rejected, (state, action) => {
         state.loading = false;
@@ -158,11 +162,13 @@ const bannersSlice = createSlice({
 
       // Toggle Status
       .addCase(toggleBannerStatus.fulfilled, (state, action) => {
-        const index = state.banners.findIndex(
-          (b) => b._id === action.payload._id,
-        );
-        if (index !== -1) {
-          state.banners[index].isActive = action.payload.isActive;
+        if (action.payload?._id) {
+          const index = state.banners.findIndex(
+            (b) => b?._id === action.payload._id,
+          );
+          if (index !== -1) {
+            state.banners[index].isActive = action.payload.isActive;
+          }
         }
       })
       .addCase(toggleBannerStatus.rejected, (state, action) => {

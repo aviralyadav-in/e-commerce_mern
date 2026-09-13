@@ -4,11 +4,15 @@ import App from "./App.jsx";
 import { Provider } from "react-redux";
 import { BrowserRouter } from "react-router";
 import store from "./app/store.js";
+import ErrorBoundary from "./components/common/ErrorBoundary";
 
 createRoot(document.getElementById("root")).render(
   <Provider store={store}>
     <BrowserRouter>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </BrowserRouter>
   </Provider>,
 );
+

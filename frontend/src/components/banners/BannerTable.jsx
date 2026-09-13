@@ -8,11 +8,12 @@ import Pagination from "../common/Pagination";
 import SortableTh from "../common/SortableTh";
 import Thumb from "../common/Thumb";
 import { ImageIcon, PencilIcon, TrashIcon, PlusIcon } from "../common/Icon";
+import { notifySuccess } from "../../lib/toast";
 
 const ACCESSORS = {
-  title: (b) => b.title,
-  status: (b) => (b.isActive ? 1 : 0),
-  sortOrder: (b) => b.sortOrder || 0,
+  title: (b) => b?.title,
+  status: (b) => (b?.isActive ? 1 : 0),
+  sortOrder: (b) => b?.sortOrder || 0,
 };
 
 const PAGE_LABELS = { home: "Home", shop: "Shop", wishlist: "Wishlist" };
@@ -38,7 +39,9 @@ const BannerTable = ({ banners, onEdit, onCreate, onToggleStatus }) => {
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return;
+    const targetTitle = deleteTarget.title;
     dispatch(deleteBanner(deleteTarget._id));
+    notifySuccess("Banner deleted", `“${targetTitle}” has been removed.`);
     setDeleteTarget(null);
   };
 

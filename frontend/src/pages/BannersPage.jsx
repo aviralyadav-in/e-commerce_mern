@@ -30,11 +30,12 @@ const BannersPage = () => {
     dispatch(fetchBanners());
   }, [dispatch]);
 
-  const activeCount = banners.filter((b) => b.isActive).length;
+  const activeCount = (banners || []).filter((b) => b?.isActive).length;
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return banners.filter((b) => {
+    return (banners || []).filter((b) => {
+      if (!b) return false;
       if (pageFilter && b.page !== pageFilter) return false;
       if (status === "active" && !b.isActive) return false;
       if (status === "inactive" && b.isActive) return false;
