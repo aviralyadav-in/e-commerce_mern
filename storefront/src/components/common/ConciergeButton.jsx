@@ -11,7 +11,10 @@ const DISMISS_KEY = "niya_concierge_dismissed";
  * no WhatsApp number is configured in store settings.
  */
 export default function ConciergeButton() {
-  const whatsapp = useSettingsStore((s) => s.settings?.whatsappNumber);
+  // Admin sets WhatsApp under social links; plain whatsappNumber is also accepted.
+  const whatsapp = useSettingsStore(
+    (s) => s.settings?.whatsappNumber || s.settings?.socialLinks?.whatsapp
+  );
   const [dismissed, setDismissed] = useState(() => {
     try {
       return sessionStorage.getItem(DISMISS_KEY) === "1";
@@ -68,6 +71,7 @@ export default function ConciergeButton() {
         target="_blank"
         rel="noopener noreferrer"
         onClick={dismiss}
+        aria-label="Chat with us on WhatsApp"
         className="group flex items-center gap-2.5 rounded-full bg-primary py-2 pl-2 pr-2 text-primary-foreground shadow-lift transition-all duration-300 ease-luxury hover:bg-primary-hover active:scale-95 sm:pr-4"
       >
         <span className="flex size-9 items-center justify-center rounded-full bg-primary-foreground/15">
